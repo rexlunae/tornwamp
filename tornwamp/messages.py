@@ -400,9 +400,9 @@ class SubscribedMessage(Message):
 
 class RPCRegisterMessage(Message):
     """
-    A Subscriber communicates its interest in a topic to the Server by sending
-    a SUBSCRIBE message:
-    [SUBSCRIBE, Request|id, Options|dict, Topic|uri]
+    A Registerer communicates its interest in a topic to the Server by sending
+    a REGISTER message:
+    [REGISTER, Request|id, Options|dict, Topic|uri]
     """
 
     def __init__(self, code=Code.REGISTER, request_id=None, options=None, topic=None):
