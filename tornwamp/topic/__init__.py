@@ -98,11 +98,11 @@ class TopicsManager(dict):
     @property
     def dict(self):
         """
-        Return a dict that is jsonifiable.
+        Return a dict that is serializable.
         """
         return {k: topic.dict for k, topic in self.items()}
 
-
+# Generally, we should only have one topic manager.  And this is it.
 topics = TopicsManager()
 
 
@@ -148,7 +148,7 @@ class Topic(object):
     @property
     def dict(self):
         """
-        Return a dict that is jsonifiable.
+        Return a dict that is serializable.
         """
         subscribers = {subscription_id: conn.dict for subscription_id, conn in self.subscribers.items()}
         publishers = {subscription_id: conn.dict for subscription_id, conn in self.publishers.items()}
@@ -171,7 +171,7 @@ class Topic(object):
         event_msg = broadcast_msg.event_message
         customize.deliver_event_messages(self, event_msg, broadcast_msg.publisher_connection_id)
         if self._publisher_connection is not None:
-            ret = utils.run_async(self._publisher_connection.call("PUBLISH", self.name, broadcast_msg.json))
+            ret = utils.run_async(self._publisher_connection.call("PUBLISH", self.name, broadcast_msg))
             if isinstance(ret, tornadis.ConnectionError):
                 raise RedisUnavailableError(ret)
             return ret

@@ -4,15 +4,14 @@ Implement Tornado WAMP Handler.
 from tornado import gen
 from tornado.websocket import WebSocketHandler
 
-import greenlet_tornado
+from warnings import warn
 
 from tornwamp import customize, session, topic
 from tornwamp.messages import AbortMessage, Message
 from tornwamp.processors import UnhandledProcessor
 
-
-SUBPROTOCOL = 'wamp.2.json'
-
+BINARY_PROTOCOL = 'wamp.2.msgpack'
+JSON_PROTOCOL = 'wamp.2.json'
 
 def abort(handler, error_msg, details, reason='tornwamp.error.unauthorized'):
     """
@@ -29,13 +28,53 @@ class WAMPHandler(WebSocketHandler):
     WAMP WebSocket Handler.
     """
 
-    def __init__(self, *args, **kargs):
+    def __init__(self, *args, preferred_protocol=BINARY_PROTOCOL, **kargs):
         self.connection = None
+        self.preferred_protocol = preferred_protocol
         super(WAMPHandler, self).__init__(*args, **kargs)
 
+    supported_protocols = {
+        JSON_PROTOCOL: True,
+        BINARY_PROTOCOL: True,
+    }
+
+
     def select_subprotocol(self, subprotocols):
-        "Select WAMP 2 subprocotol"
-        return SUBPROTOCOL
+        """
+        Select WAMP 2 subprocotol
+        """
+        current_protocol = JSON_PROTOCOL    # All WAMP implementations should support json, so we default to that.
+        for protocol in subprotocols:
+            if self.supported_protocols[protocol]:
+                current_protocol = protocol
+                if protocol == self.preferred_protocol:
+                    self.protocol = protocol
+                    return protocol
+
+        self.protocol = current_protocol
+        return current_protocol
+
+    def write_message(self, msg):
+        """
+        Reads a message to the WebSocket in the format selected for it.
+        """
+        if self.protocol == JSON_PROTOCOL:
+            return super(WAMPHandler, self).write_message(msg.json)
+        elif self.protocol == BINARY_PROTOCOL:
+            return super(WAMPHandler, self).write_message(msg.msgpack, binary=True)
+        else:
+            warn('unknown protocol ' + self.protocol)
+
+    def read_message(self, txt):
+        """
+        Reads a message in whatever format is selected for the WebSocket.
+        """
+        if self.protocol == JSON_PROTOCOL:
+            return Message.from_text(txt)
+        elif self.protocol == BINARY_PROTOCOL:
+            return Message.from_bin(txt)
+        else:
+            warn('unknown protocol ' + self.protocol)
 
     def authorize(self):
         """
@@ -76,21 +115,20 @@ class WAMPHandler(WebSocketHandler):
         else:
             abort(self, error_msg, details)
 
-    @greenlet_tornado.asynchronous
-    def on_message(self, txt):
+    async def on_message(self, txt):
         """
         Handle incoming messages on the WebSocket. Each message will be parsed
         and handled by a Processor, which can be (re)defined by the user
         changing the value of 'processors' dict, available at
         tornwamp.customize module.
         """
-        msg = Message.from_text(txt)
+        msg = self.read_message(txt)
         Processor = customize.processors.get(msg.code, UnhandledProcessor)
         processor = Processor(msg, self.connection)
 
         if self.connection and not self.connection.zombie:  # TODO: cover branch else
             if processor.answer_message is not None:
-                self.write_message(processor.answer_message.json)
+                self.write_message(processor.answer_message)
 
         customize.broadcast_messages(processor)
 

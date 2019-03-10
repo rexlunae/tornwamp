@@ -5,11 +5,13 @@ Compatible with WAMP Document Revision: RC3, 2014/08/25, available at:
 https://github.com/tavendo/WAMP/blob/master/spec/basic.md
 """
 import json
+import msgpack
 import uuid
 from copy import deepcopy
 
 from enum import IntEnum
 from tornwamp.identifier import create_global_id
+from io import BytesIO
 
 PUBLISHER_NODE_ID = uuid.uuid4()
 
@@ -60,16 +62,45 @@ class BroadcastMessage(object):
 
     @property
     def json(self):
-        return json.dumps({
+        info_struct = {
             "publisher_node_id": self.publisher_node_id,
             "publisher_connection_id": self.publisher_connection_id,
             "topic_name": self.topic_name,
             "event_message": self.event_message.json,
-        })
+        }
+        return json.dumps(info_struct)
+
+    @property
+    def msgpack(self):
+        info_struct = {
+            "publisher_node_id": self.publisher_node_id,
+            "publisher_connection_id": self.publisher_connection_id,
+            "topic_name": self.topic_name,
+            "event_message": self.event_message.msgpack,
+        }
+        return msgpack.packb(info_struct, use_bin_type=True)
 
     @classmethod
     def from_text(cls, text):
+        """
+        Make a BroadcastMessage from text in a json struct
+        """
         raw = json.loads(text)
+        event_msg = EventMessage.from_text(raw["event_message"])
+        msg = cls(
+            topic_name=raw["topic_name"],
+            event_message=event_msg,
+            publisher_connection_id=raw["publisher_connection_id"]
+        )
+        msg.publisher_node_id = raw["publisher_node_id"]
+        return msg
+
+    @classmethod
+    def from_bin(cls, bin):
+        """
+        Make a BroadcastMessage from a binary blob
+        """
+        raw = msgpack.unpackb(bin, raw=False)
         event_msg = EventMessage.from_text(raw["event_message"])
         msg = cls(
             topic_name=raw["topic_name"],
@@ -114,6 +145,17 @@ class Message(object):
                 message_value[index] = item.value
         return json.dumps(message_value)
 
+    @property
+    def msgpack(self):
+        """
+        Create a MSGPack representation for this message.
+        """
+        message_value = deepcopy(self.value)
+        for index, item in enumerate(message_value):
+            if isinstance(item, Code):
+                message_value[index] = item.value
+        return msgpack.packb(message_value, use_bin_type=True)
+
     def error(self, text, info=None):
         """
         Add error description and aditional information.
@@ -130,6 +172,15 @@ class Message(object):
         Decode text to JSON and return a Message object accordingly.
         """
         raw = json.loads(text)
+        raw[0] = Code(raw[0])  # make it an object of type Code
+        return cls(*raw)
+
+    @classmethod
+    def from_bin(cls, bin):
+        """
+        Decode binary blob to a message and return a Message object accordingly.
+        """
+        raw = msgpack.unpackb(bin, raw=False)
         raw[0] = Code(raw[0])  # make it an object of type Code
         return cls(*raw)
 
@@ -490,4 +541,4 @@ def build_error_message(in_message, uri, description):
             uri=uri
         )
         answer.error(description)
-        return answer.json
+        return answer
