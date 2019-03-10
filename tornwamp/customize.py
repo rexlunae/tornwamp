@@ -13,7 +13,8 @@ processors = {
     Code.GOODBYE: GoodbyeProcessor,
     Code.SUBSCRIBE: pubsub.SubscribeProcessor,
     Code.CALL: rpc.CallProcessor,
-    Code.PUBLISH: pubsub.PublishProcessor
+    Code.REGISTER: rpc.RegisterProcessor,
+    Code.PUBLISH: pubsub.PublishProcessor,
 }
 #    2: 'welcome',
 #    3: 'abort',

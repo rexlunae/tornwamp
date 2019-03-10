@@ -43,6 +43,17 @@ class TopicsManager(dict):
         connection.add_subscription_channel(subscription_id, topic_name)
         return subscription_id
 
+    def add_rpc(self, topic_name, connection, registration_id=None):
+        """
+        Add a new RPC target on this connection.
+        """
+        topic = self.get(topic_name, Topic(topic_name, self.redis))
+        registration_id = registration_id or create_global_id()
+        topic.procedures = connection
+        self[topic_name] = topic
+        connection.add_publishing_channel(registration_id, topic_name)
+        return registration_id
+
     def remove_subscriber(self, topic_name, subscription_id):
         """
         Remove a connection a topic's subscriber provided:
