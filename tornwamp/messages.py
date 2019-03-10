@@ -421,12 +421,13 @@ class RPCRegisteredMessage(Message):
     sending a REGISTERED message to the Registerer:
     [REGISTERED, REGISTER.Request|id, Registration|id]
     """
-    def __init__(self, code=Code.REGISTERED, request_id=None, registration_id=None):
+    def __init__(self, code=Code.REGISTERED, request_id=None, registration_id=None, topic=None):
         assert request_id is not None, "RegisteredMessage must have request_id"
         assert registration_id is not None, "RegisteredMessage must have registration_id"
         self.code = code
         self.request_id = request_id
         self.registration_id = registration_id
+        self.topic = topic
         self.value = [self.code, self.request_id, self.registration_id]
 
 
