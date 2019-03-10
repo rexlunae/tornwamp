@@ -3,7 +3,7 @@ TornWAMP user-configurable structures.
 """
 from tornado import gen
 
-from tornwamp import topic as tornwamp_topic
+from tornwamp.topic import topics
 from tornwamp.processors import GoodbyeProcessor, HelloProcessor, pubsub, rpc
 from tornwamp.messages import Code
 
@@ -39,5 +39,9 @@ processors = {
 
 def broadcast_messages(processor):
     for msg in processor.broadcast_messages:
-        topic = tornwamp_topic.topics.get(msg.topic_name)
-        topic.publish(msg)
+        topic = topics.get(msg.topic_name)
+
+        # Only publish if there is someone listening.
+        if topic is not None:
+            topic.publish(msg)
+
