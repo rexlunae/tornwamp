@@ -6,7 +6,7 @@ from tornwamp.identifier import create_global_id
 from tornwamp.messages import ErrorMessage, EventMessage, PublishMessage, PublishedMessage, SubscribeMessage, SubscribedMessage, BroadcastMessage
 from tornwamp.processors import Processor
 from tornwamp.processors.pubsub import customize
-from tornwamp import topic as tornwamp_topic
+from tornwamp.topic import topics
 
 
 class SubscribeProcessor(Processor):
@@ -20,7 +20,7 @@ class SubscribeProcessor(Processor):
         received_message = SubscribeMessage(*self.message.value)
         allow, msg = customize.authorize_subscription(received_message.topic, self.connection)
         if allow:
-            subscription_id = tornwamp_topic.topics.add_subscriber(
+            subscription_id = topics.add_subscriber(
                 received_message.topic,
                 self.connection,
             )
