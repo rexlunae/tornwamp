@@ -16,6 +16,7 @@ from io import BytesIO
 PUBLISHER_NODE_ID = uuid.uuid4()
 
 
+
 class Code(IntEnum):
     """
     Enum which represents currently supported WAMP messages.
@@ -38,8 +39,8 @@ class Code(IntEnum):
     CALL = 48
     # CANCEL = 49
     RESULT = 50
-    # REGISTER = 64
-    # REGISTERED = 65
+    REGISTER = 64
+    REGISTERED = 65
     # UNREGISTER = 66
     # UNREGISTERED = 67
     # INVOCATION = 68
@@ -396,6 +397,40 @@ class SubscribedMessage(Message):
         self.value = [self.code, self.request_id, self.subscription_id]
 
 
+
+class RPCRegisterMessage(Message):
+    """
+    A Subscriber communicates its interest in a topic to the Server by sending
+    a SUBSCRIBE message:
+    [SUBSCRIBE, Request|id, Options|dict, Topic|uri]
+    """
+
+    def __init__(self, code=Code.REGISTER, request_id=None, options=None, topic=None):
+        assert request_id is not None, "RegisterMessage must have request_id"
+        assert topic is not None, "RegisterMessage must have topic"
+        self.code = code
+        self.request_id = request_id
+        self.options = options or {}
+        self.topic = topic
+        self.value = [self.code, self.request_id, self.options, self.topic]
+
+
+class RPCRegisteredMessage(Message):
+    """
+    If the Broker is able to fulfill and allow the registration, it answers by
+    sending a REGISTERED message to the Registerer:
+    [REGISTERED, REGISTER.Request|id, Registration|id]
+    """
+    def __init__(self, code=Code.REGISTERED, request_id=None, registration_id=None):
+        assert request_id is not None, "RegisteredMessage must have request_id"
+        assert registration_id is not None, "RegisteredMessage must have registration_id"
+        self.code = code
+        self.request_id = request_id
+        self.registration_id = registration_id
+        self.value = [self.code, self.request_id, self.registration_id]
+
+
+
 class PublishMessage(Message):
     """
     Sent by a Publisher to a Broker to publish an event.
@@ -509,9 +544,9 @@ CODE_TO_CLASS = {
     Code.EVENT: EventMessage,
     Code.CALL: CallMessage,
     # CANCEL = 49
-    Code.RESULT: ResultMessage
-    # REGISTER = 64
-    # REGISTERED = 65
+    Code.RESULT: ResultMessage,
+    Code.REGISTER: RPCRegisterMessage,          # 64
+    Code.REGISTERED: RPCRegisteredMessage,      # 65
     # UNREGISTER = 66
     # UNREGISTERED = 67
     # INVOCATION = 68
