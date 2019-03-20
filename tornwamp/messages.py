@@ -10,8 +10,9 @@ import uuid
 from copy import deepcopy
 
 from enum import IntEnum
-from tornwamp.identifier import create_global_id
 from io import BytesIO
+
+from tornwamp.identifier import create_global_id
 
 PUBLISHER_NODE_ID = uuid.uuid4()
 
@@ -43,9 +44,9 @@ class Code(IntEnum):
     REGISTERED = 65
     # UNREGISTER = 66
     # UNREGISTERED = 67
-    # INVOCATION = 68
+    INVOCATION = 68
     # INTERRUPT = 69
-    # YIELD = 70
+    YIELD = 70
 
 
 class BroadcastMessage(object):
@@ -331,6 +332,59 @@ class CallMessage(Message):
         ]
         self._update_args_and_kargs()
 
+class InvocationMessage(Message):
+    """
+    Used by the dealer to request an RPC from a client.  The client should respond with a YIELD message if successful.
+
+    [INVOCATION, Request|id, REGISTERED.Registration|id, Details|dict]
+    [INVOCATION, Request|id, REGISTERED.Registration|id, Details|dict, CALL.Arguments|list]
+    [INVOCATION, Request|id, REGISTERED.Registration|id, Details|dict, CALL.Arguments|list, CALL.ArgumentsKw|dict]
+    """
+
+    def __init__(self, code=Code.INVOCATION, request_id=None, registration_id=None, details=None, args=None, kwargs=None):
+        if request_id is None:
+            request_id = create_global_id()
+        assert request_id is not None, "InvocationMessage must have request_id"
+        assert registration_id is not None, "InvocationMessage must have registration_id"
+        assert details is not None, "InvocationMessage must have details"
+        self.code = code
+        self.request_id = request_id
+        self.registration_id = registration_id or {}
+        self.details = details
+        self.args = args
+        self.kwargs = kwargs
+        self.value = [
+            self.code,
+            self.request_id,
+            self.registration_id,
+            self.details,
+        ]
+        self._update_args_and_kargs()
+
+
+class YieldMessage(Message):
+    """
+    Used by the dealer to deliver the result of an RPC to the requesting client.  The client should respond with a YIELD message if successful.
+
+    [YIELD, INVOCATION.Request|id, Options|dict]
+    [YIELD, INVOCATION.Request|id, Options|dict, Arguments|list]
+    [YIELD, INVOCATION.Request|id, Options|dict, Arguments|list,ArgumentsKw|dict]
+    """
+
+    def __init__(self, code=Code.YIELD, request_id=None, options=None, args=None, kwargs=None):
+        assert request_id is not None, "YieldMessage must have request_id"
+        self.code = code
+        self.options = options
+        self.request_id = request_id
+        self.args = args
+        self.kwargs = kwargs
+        self.value = [
+            self.code,
+            self.request_id,
+            self.options,
+        ]
+        self._update_args_and_kargs()
+
 
 class ErrorMessage(Message):
     """
@@ -421,13 +475,15 @@ class RPCRegisteredMessage(Message):
     sending a REGISTERED message to the Registerer:
     [REGISTERED, REGISTER.Request|id, Registration|id]
     """
-    def __init__(self, code=Code.REGISTERED, request_id=None, registration_id=None, topic=None):
+    def __init__(self, code=Code.REGISTERED, request_id=None, registration_id=None):
+        if registration_id is None:
+            registration_id = create_global_id()
         assert request_id is not None, "RegisteredMessage must have request_id"
         assert registration_id is not None, "RegisteredMessage must have registration_id"
         self.code = code
         self.request_id = request_id
         self.registration_id = registration_id
-        self.topic = topic
+        #self.topic = topic
         self.value = [self.code, self.request_id, self.registration_id]
 
 
@@ -550,9 +606,9 @@ CODE_TO_CLASS = {
     Code.REGISTERED: RPCRegisteredMessage,      # 65
     # UNREGISTER = 66
     # UNREGISTERED = 67
-    # INVOCATION = 68
+    Code.INVOCATION: InvocationMessage,         # 68
     # INTERRUPT = 69
-    # YIELD = 70
+    Code.YIELD: YieldMessage,                   # 70
 }
 
 ERROR_PRONE_CODES = [Code.CALL, Code.SUBSCRIBE, Code.UNSUBSCRIBE, Code.PUBLISH]

@@ -15,6 +15,7 @@ processors = {
     Code.CALL: rpc.CallProcessor,
     Code.REGISTER: rpc.RegisterProcessor,
     Code.PUBLISH: pubsub.PublishProcessor,
+    Code.YIELD: rpc.YieldProcessor,
 }
 #    2: 'welcome',
 #    3: 'abort',

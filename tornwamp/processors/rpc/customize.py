@@ -9,8 +9,11 @@ procedure, the later describes the notification message to be
 broadcasted to the other active connections (further restrictions to the
 broadcasted message can be added in the delivery methods).
 """
+from warnings import warn
 
-from tornwamp.messages import ResultMessage
+from tornwamp.messages import ResultMessage, InvocationMessage, ErrorMessage, Code
+from tornwamp.topic import topics
+from datetime import datetime
 
 def authorize_registration(topic_name, connection):
     """
@@ -25,13 +28,37 @@ def authorize_registration(topic_name, connection):
 
     return True, ""
 
-def invoke(call_message, connection, *args):
-    """
-    Places an RPC with the connection that registered it.  Sends the result
-    back to the connection that initiated the connection.
-    """
+# Tracks open requests.  Contains a tuple of (connection, )
+request_ids = {}
 
-def ping(call_message, connection):
+def invoke(call_message, connection, args, kwargs, *_trailing):
+    """
+    Places an RPC with the connection that registered it.  Once the result is
+    sent to us, we will send it back to the caller, but the only time we can directly
+    respond synchronously is if there is an error.
+    """
+    topic = topics.get(call_message.procedure)
+
+    # Check that the procedure called has been registered.
+    if topic is None:
+        return ErrorMessage(request_code=Code.CALL, request_id=call_message.request_id, uri='wamp.uri.rpc.notfound')
+    else:
+        # Create INVOCATION message to the client that registered the RPC.
+        invoke_msg = InvocationMessage(registration_id=topic.registration_id, details=call_message.details, args=args, kwargs=kwargs)
+
+        # Keep track of the connection that wants the response.
+        request_ids[invoke_msg.request_id] = (connection, datetime.utcnow())
+
+        # Send the invocation message.
+        topic.invoke(invoke_msg)
+
+        # Don't return anything to teh caller...for now.
+        return None
+
+
+
+
+def ping(call_message, connection, *_trailing):
     """
     Return a answer (ResultMessage) and empty list direct_messages.
     """
@@ -45,5 +72,8 @@ def ping(call_message, connection):
     return answer
 
 procedures = {
-    "ping": ping
+    # 'uri': [function, provider_connection, args, kwargs]
+    # args and kwargs will be merged with arguments recieved in the request.
+    'ping': [ping, [], {}],
+    'invoke': [invoke, ['foo'], {'bar':'baz'}]
 }

@@ -7,7 +7,7 @@ import tornadis
 from tornwamp import messages, utils
 from tornwamp.topic import customize
 from tornwamp.identifier import create_global_id
-
+from tornwamp import processors
 
 PUBSUB_TIMEOUT = 60
 PUBLISHER_CONNECTION_TIMEOUT = 3 * 3600 * 1000  # 3 hours in miliseconds
@@ -20,7 +20,7 @@ class RedisUnavailableError(Exception):
 class TopicsManager(dict):
     """
     Manages all existing topics to which connections can potentially
-    publish and/or subscribe to.
+    publish, subscribe, or call to.
     """
     def __init__(self):
         self.redis = None
@@ -43,15 +43,17 @@ class TopicsManager(dict):
         connection.add_subscription_channel(subscription_id, topic_name)
         return subscription_id
 
-    def add_rpc(self, topic_name, connection, registration_id=None):
+    def add_rpc(self, topic_name, connection, invoke=None):
         """
         Add a new RPC target on this connection.
         """
-        topic = self.get(topic_name, Topic(topic_name, self.redis))
-        registration_id = registration_id or create_global_id()
-        topic.procedures = connection
+        new_topic = Topic(topic_name,  redis=self.redis, rpc=True, provider=connection,)
+        topic = self.get(topic_name, new_topic)
+        #registration_id = create_global_id()
+        registration_id = new_topic.registration_id
+        processors.rpc.customize.procedures[topic_name] = [invoke, [], {}]
         self[topic_name] = topic
-        connection.add_publishing_channel(registration_id, topic_name)
+        #connection.add_publishing_channel(registration_id, topic_name)
         return registration_id
 
     def remove_subscriber(self, topic_name, subscription_id):
@@ -119,12 +121,18 @@ topics = TopicsManager()
 
 class Topic(object):
     """
-    Represent a topic, containing its name, subscribers and publishers.
+    Represent a topic, containing its name, subscribers and publishers, or provider connections.
     """
-    def __init__(self, name, redis=None):
+    def __init__(self, name, rpc=False, provider=None, redis=None):
+        self.registration_id=create_global_id()
         self.name = name
-        self.subscribers = {}
-        self.publishers = {}
+        if rpc:
+            self.rpc = rpc
+            assert provider is not None
+            self.provider = provider
+        else:
+            self.subscribers = {}
+            self.publishers = {}
         self.redis_params = redis
         if self.redis_params is not None:
             self._publisher_connection = tornadis.Client(ioloop=ioloop.IOLoop.current(), autoconnect=True, **self.redis_params)
@@ -169,6 +177,15 @@ class Topic(object):
             "publishers": publishers
         }
         return data
+
+    def invoke(self, msg):
+        """
+        Send an INVOCATION message to the provider.
+        """
+        assert self.rpc == True
+        request_id = msg.request_id         # Read the message id from the message.  We just trust that this has been generated correctly.
+
+        self.provider.write_message(msg)
 
     def publish(self, broadcast_msg):
         """

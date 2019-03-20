@@ -10,9 +10,32 @@ import asyncio
 from tornado import gen
 
 from tornwamp.topic import topics
-from tornwamp.messages import CallMessage, RPCRegisteredMessage, ResultMessage, ErrorMessage, EventMessage
+from tornwamp.messages import CallMessage, RPCRegisterMessage, RPCRegisteredMessage, ResultMessage, ErrorMessage, EventMessage, YieldMessage
 from tornwamp.processors import Processor
 from tornwamp.processors.rpc import customize
+
+class YieldProcessor(Processor):
+    """
+    Responsible for dealing YIELD messages.
+    """
+    def process(self):
+        """
+        Sends the final value of the RPC to the original caller.
+        """
+        yield_message = YieldMessage(*self.message.value)
+        (destination_connection, date) = customize.request_ids.pop(yield_message.request_id, None)
+
+        if destination_connection is None:
+            return ErrorMessage(request_code=Code.YIELD, request_id=yield_message.request_id, uri='wamp.not.pending')
+        elif destination_connection.zombie:
+            warn('Lost connection before response' + str(yield_message.value))
+        else:
+            result_message = ResultMessage(request_id=yield_message.request_id, details=yield_message.details, args=yield_message.args, kwargs=yield_message.kwargs)
+            destination_connection.write_message(result_message)
+
+            # There is no return message from a yield.
+            return None
+    
 
 class RegisterProcessor(Processor):
     """
@@ -20,25 +43,27 @@ class RegisterProcessor(Processor):
     """
     def process(self):
         """
-        Return REGISTERED message based on the input HELLO message.
+        Return REGISTERED message based on the input REGISTER message.
         """
-        # REGISTERED messages do not contain the uri of the procedure:
-        received_message = RPCRegisteredMessage(*self.message.value)
-        allow, msg = customize.authorize_registration(received_message.topic, self.connection)
+
+        # We reprocess the message into a full RPCRegisterMessage to get all the methods and properties.
+        full_message = RPCRegisterMessage(*self.message.value)
+        allow, msg = customize.authorize_registration(full_message.topic, self.connection)
+        
+        # By default we send an error back.
+        answer = ErrorMessage(
+            request_id=full_message.request_id,
+            request_code=full_message.code,
+            uri="tornwamp.register.unauthorized"
+        )
+        answer.error(msg)
+
         if allow:
-            registration_id = topics.add_rpc(received_message.topic, self.connection)
+            registration_id = topics.add_rpc(full_message.topic, self.connection, invoke=customize.invoke)
             answer = RPCRegisteredMessage(
-                request_id=received_message.request_id,
-                registration_id=registration_id
+                request_id=full_message.request_id,
+                registration_id=registration_id,
             )
-            #self.broadcast_messages = customize.get_subscribe_broadcast_messages(received_message, registration_id, self.connection.id)
-        else:
-            answer = ErrorMessage(
-                request_id=received_message.request_id,
-                request_code=received_message.code,
-                uri="tornwamp.register.unauthorized"
-            )
-            answer.error(msg)
         self.answer_message = answer
 
 
@@ -48,28 +73,26 @@ class CallProcessor(Processor):
     """
     def process(self):
         """
-        Call method defined in tornwamp.customize.procedures (dict).
+        Call an RPC, either defined in tornwamp.customize.procedures (dict), or a remote call to another client.
 
         Each method should return:
-        - RESPONSE
+        - RESULT
         - ERROR
+
+        However, if the dealer cannot handle the call locally, the RESULT will be issued separately.  This is the normal case.
 
         Which will be the processor's answer message.'
         """
         msg = CallMessage(*self.message.value)
-        method_name = msg.procedure
-        if method_name in customize.procedures:
-            method = customize.procedures[method_name]
-            answer = method(*msg.args, call_message=msg, connection=self.connection, **msg.kwargs)
+        if msg.procedure in customize.procedures:
+            [method, args, kwargs] = customize.procedures[msg.procedure]
+            self.answer_message = method(msg, self.connection, [*msg.args, *args], { **msg.kwargs, **kwargs })
         else:
-            error_uri = "wamp.rpc.unsupported.procedure"
-            error_msg = "The procedure {} doesn't exist".format(method_name)
             response_msg = ErrorMessage(
                 request_code=msg.code,
                 request_id=msg.request_id,
                 details={"call": msg.json},
-                uri=error_uri
+                uri="wamp.rpc.unsupported.procedure"
             )
-            response_msg.error(error_msg)
-            answer = response_msg
-        self.answer_message = answer
+            response_msg.error("The procedure {} doesn't exist".format(msg.procedure))
+            self.answer_message = response_msg

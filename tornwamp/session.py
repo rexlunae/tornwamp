@@ -70,6 +70,10 @@ class ClientConnection(object):
         self.zombie = False
         self.zombification_datetime = None
 
+    # Send a message to the client in whatever encoding is appropriate.
+    def write_message(self, msg):
+        self._websocket.write_message(msg)
+
     @property
     def peer(self):
         try:
