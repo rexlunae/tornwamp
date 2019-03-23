@@ -41,7 +41,7 @@ processors = {
 
 def broadcast_messages(processor):
     for msg in processor.broadcast_messages:
-        topic = uri.get(msg.topic_name)
+        topic = uri_registry.get(msg.topic_name)
 
         # Only publish if there is someone listening.
         if topic is not None:
