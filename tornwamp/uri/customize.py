@@ -14,7 +14,7 @@ def deliver_event_messages(uri, event_msg, publisher_connection_id=None):
         publisher_connection_id - if it is not None, it is the websocket
         connection id of the publisher
     """
-    for subscription_id, subscriber in topic.subscribers.items():
+    for subscription_id, subscriber in uri.subscribers.items():
         if publisher_connection_id is None or subscriber.id != publisher_connection_id:
             event_msg.subscription_id = subscription_id
             subscriber._websocket.write_message(event_msg)
