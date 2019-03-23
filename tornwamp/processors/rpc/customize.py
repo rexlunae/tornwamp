@@ -12,7 +12,7 @@ broadcasted message can be added in the delivery methods).
 from warnings import warn
 
 from tornwamp.messages import ResultMessage, InvocationMessage, ErrorMessage, Code
-from tornwamp.uri import uri_registry
+from tornwamp.uri.manager import uri_registry
 from datetime import datetime
 
 def authorize_registration(topic_name, connection):

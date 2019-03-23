@@ -6,13 +6,15 @@ https://github.com/tavendo/WAMP/blob/master/spec/basic.md
 """
 
 import asyncio
+from warnings import warn
 
 from tornado import gen
 
-from tornwamp.uri import uri_registry
+from tornwamp.uri.manager import uri_registry
 from tornwamp.messages import CallMessage, RPCRegisterMessage, RPCRegisteredMessage, ResultMessage, ErrorMessage, EventMessage, YieldMessage
 from tornwamp.processors import Processor
 from tornwamp.processors.rpc import customize
+from tornwamp.messages import Code
 
 class YieldProcessor(Processor):
     """

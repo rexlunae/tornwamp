@@ -6,7 +6,7 @@ from tornwamp.identifier import create_global_id
 from tornwamp.messages import ErrorMessage, EventMessage, PublishMessage, PublishedMessage, SubscribeMessage, SubscribedMessage, BroadcastMessage
 from tornwamp.processors import Processor
 from tornwamp.processors.pubsub import customize
-from tornwamp.uri import uri_registry
+from tornwamp.uri.manager import uri_registry
 
 
 class SubscribeProcessor(Processor):

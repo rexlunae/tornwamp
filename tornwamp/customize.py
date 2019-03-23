@@ -3,7 +3,7 @@ TornWAMP user-configurable structures.
 """
 from tornado import gen
 
-from tornwamp.uri import uri_registry
+from tornwamp.uri.manager import uri_registry
 from tornwamp.processors import GoodbyeProcessor, HelloProcessor, pubsub, rpc
 from tornwamp.messages import Code
 
