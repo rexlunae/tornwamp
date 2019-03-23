@@ -9,7 +9,7 @@ import asyncio
 
 from tornado import gen
 
-from tornwamp.topic import topics
+from tornwamp.uri import uri_registry
 from tornwamp.messages import CallMessage, RPCRegisterMessage, RPCRegisteredMessage, ResultMessage, ErrorMessage, EventMessage, YieldMessage
 from tornwamp.processors import Processor
 from tornwamp.processors.rpc import customize
@@ -59,7 +59,7 @@ class RegisterProcessor(Processor):
         answer.error(msg)
 
         if allow:
-            registration_id = topics.add_rpc(full_message.topic, self.connection, invoke=customize.invoke)
+            registration_id = uri_registry.add_rpc(full_message.topic, self.connection, invoke=customize.invoke)
             answer = RPCRegisteredMessage(
                 request_id=full_message.request_id,
                 registration_id=registration_id,
@@ -79,7 +79,7 @@ class CallProcessor(Processor):
         - RESULT
         - ERROR
 
-        However, if the dealer cannot handle the call locally, the RESULT will be issued separately.  This is the normal case.
+        However, if the dealer cannot handle the call locally, the RESULT will be issued separately, and no message will issue from this routine.  This is the normal case.
 
         Which will be the processor's answer message.'
         """

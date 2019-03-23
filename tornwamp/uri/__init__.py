@@ -1,23 +1,33 @@
 """
 Used to handle PubSub topics publishers and subscribers
 """
+from enum import Enum
 from tornado import gen, ioloop
 import tornadis
 
 from tornwamp import messages, utils
-from tornwamp.topic import customize
+from tornwamp.uri import customize
 from tornwamp.identifier import create_global_id
 from tornwamp import processors
 
 PUBSUB_TIMEOUT = 60
 PUBLISHER_CONNECTION_TIMEOUT = 3 * 3600 * 1000  # 3 hours in miliseconds
 
+# https://wamp-proto.org/_static/gen/wamp_latest.html#identifiers
+class URIType(Enum):
+    """
+    The type of URI that we're dealing with.
+    """
+    TOPIC = 0
+    PROCEDURE = 1
+    ERROR = 2
+
 
 class RedisUnavailableError(Exception):
     pass
 
 
-class TopicsManager(dict):
+class URIManager(dict):
     """
     Manages all existing topics to which connections can potentially
     publish, subscribe, or call to.
@@ -29,13 +39,13 @@ class TopicsManager(dict):
         """
         Creates a new topic with given name with configured redis address
         """
-        self[topic_name] = self.get(topic_name, Topic(topic_name, self.redis))
+        self[topic_name] = self.get(topic_name, URI(topic_name, self.redis))
 
     def add_subscriber(self, topic_name, connection, subscription_id=None):
         """
         Add a connection as a topic's subscriber.
         """
-        new_topic = Topic(topic_name, self.redis)
+        new_topic = URI(topic_name, self.redis)
         topic = self.get(topic_name, new_topic)
         subscription_id = subscription_id or create_global_id()
         topic.add_subscriber(subscription_id, connection)
@@ -47,7 +57,7 @@ class TopicsManager(dict):
         """
         Add a new RPC target on this connection.
         """
-        new_topic = Topic(topic_name,  redis=self.redis, rpc=True, provider=connection,)
+        new_topic = URI(topic_name,  redis=self.redis, rpc=True, provider=connection,)
         topic = self.get(topic_name, new_topic)
         #registration_id = create_global_id()
         registration_id = new_topic.registration_id
@@ -115,13 +125,13 @@ class TopicsManager(dict):
         """
         return {k: topic.dict for k, topic in self.items()}
 
-# Generally, we should only have one topic manager.  And this is it.
-topics = TopicsManager()
+# Generally, we should only have one uri manager.  And this is it.
+uri_registry = URIManager()
 
 
-class Topic(object):
+class URI(object):
     """
-    Represent a topic, containing its name, subscribers and publishers, or provider connections.
+    Represent a URI, containing its name, subscribers and publishers, or provider connections.
     """
     def __init__(self, name, rpc=False, provider=None, redis=None):
         self.registration_id=create_global_id()
