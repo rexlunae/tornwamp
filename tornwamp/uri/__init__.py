@@ -2,7 +2,6 @@
 Used to handle PubSub topics publishers and subscribers
 """
 from enum import Enum
-#from tornado import ioloop
 import tornadis
 
 from tornwamp import messages
