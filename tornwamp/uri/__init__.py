@@ -28,8 +28,8 @@ class URI(object):
 
     def _on_event_message(self, uri, raw_msg):
         msg = messages.BroadcastMessage.from_text(raw_msg.decode("utf-8"))
-        assert_msg = "broadcast message topic and redis pub/sub queue must match ({} != {})".format(uri, msg.uri)
-        assert uri == msg.uri, assert_msg
+        #assert_msg = "broadcast message topic and redis pub/sub queue must match ({} != {})".format(uri, msg.uri)
+        #assert uri == msg.uri, assert_msg
         if msg.publisher_node_id != messages.PUBLISHER_NODE_ID.hex:
             deliver_event_messages(self, msg.event_message, None)
 
