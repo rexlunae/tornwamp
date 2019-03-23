@@ -35,88 +35,103 @@ class URIManager(dict):
     def __init__(self):
         self.redis = None
 
-    def create_topic(self, topic_name):
+    def create_topic(self, name):
         """
-        Creates a new topic with given name with configured redis address
+        Creates a topic that can be subscribed and published to.
         """
-        self[topic_name] = self.get(topic_name, URI(topic_name, self.redis))
+        self[name] = self.get(uri, Topic(name, self.redis))
 
-    def add_subscriber(self, topic_name, connection, subscription_id=None):
+    def create_error(self, name):
         """
-        Add a connection as a topic's subscriber.
+        Adds an entry for an error URI.
         """
-        new_topic = URI(topic_name, self.redis)
-        topic = self.get(topic_name, new_topic)
-        subscription_id = subscription_id or create_global_id()
-        topic.add_subscriber(subscription_id, connection)
-        self[topic_name] = topic
-        connection.add_subscription_channel(subscription_id, topic_name)
-        return subscription_id
+        new_uri = Error(name)
+        uri = self.get(name, new_uri)
 
-    def add_rpc(self, topic_name, connection, invoke=None):
+
+    def create_rpc(self, name, connection, invoke=None):
         """
         Add a new RPC target on this connection.
         """
-        new_topic = URI(topic_name,  redis=self.redis, rpc=True, provider=connection,)
-        topic = self.get(topic_name, new_topic)
-        #registration_id = create_global_id()
-        registration_id = new_topic.registration_id
-        processors.rpc.customize.procedures[topic_name] = [invoke, [], {}]
-        self[topic_name] = topic
-        #connection.add_publishing_channel(registration_id, topic_name)
+        new_uri = Procedure(name, provider=connection)
+        uri = self.get(name, new_uri)
+        registration_id = new_uri.registration_id
+        processors.rpc.customize.procedures[name] = [invoke, [], {}]
+        self[name] = uri
         return registration_id
 
-    def remove_subscriber(self, topic_name, subscription_id):
+    def remove_rpc(self, name, registration_id):
+        uri = self.get(name)
+        if uri is not None:
+            pass
+            # XXX - Figure this out.
+
+    def add_subscriber(self, uri, connection, registration_id=None):
+        """
+        Add a connection as a topic's subscriber.
+        """
+        new_topic = Topic(uri, self.redis)
+        topic = self.get(uri, new_topic)
+        registration_id = registration_id or create_global_id()
+        topic.add_subscriber(registration_id, connection)
+        self[uri] = topic
+        connection.add_subscription_channel(registration_id, uri)
+        return registration_id
+
+    def remove_subscriber(self, uri, registration_id):
         """
         Remove a connection a topic's subscriber provided:
-        - topic_name
+        - uri
         - subscription_id
         """
-        topic = self.get(topic_name)
-        if topic is not None:
-            connection = topic.remove_subscriber(subscription_id)
-            connection.remove_subscription_channel(topic_name)
+        topic = self.get(uri)
+        if topic is not None and topic.uri_type == URIType.TOPIC:
+            connection = topic.remove_subscriber(registration_id)
+            connection.remove_subscription_channel(uri)
+        else:
+            from warnings import warn
+            warn('uri ' + topic.uri_type + ' is of type ' + topic.uri_type)
 
-    def add_publisher(self, topic_name, connection, subscription_id=None):
+    def add_publisher(self, uri, connection, subscription_id=None):
         """
         Add a connection as a topic's publisher.
         """
-        topic = self.get(topic_name, Topic(topic_name, self.redis))
+        topic = self.get(uri, Topic(uri, self.redis))
         subscription_id = subscription_id or create_global_id()
         topic.publishers[subscription_id] = connection
-        self[topic_name] = topic
-        connection.add_publishing_channel(subscription_id, topic_name)
+        self[uri] = topic
+        connection.add_publishing_channel(subscription_id, uri)
         return subscription_id
 
-    def remove_publisher(self, topic_name, subscription_id):
+    def remove_publisher(self, uri, subscription_id):
         """
         Remove a connection a topic's subscriber
         """
-        topic = self.get(topic_name)
+        topic = self.get(uri)
         if topic and subscription_id in topic.publishers:
             connection = topic.publishers.pop(subscription_id)
-            connection.remove_publishing_channel(topic_name)
+            connection.remove_publishing_channel(uri)
 
     def remove_connection(self, connection):
         """
         Connection is to be removed, scrap all connection publishers/subscribers in every topic
         """
-        for topic_name, subscription_id in connection.topics.get("publisher", {}).items():
-            topic = self.get(topic_name)
-            topic.publishers.pop(subscription_id, None)
+        for name, registration_id in connection.topics.get("publisher", {}).items():
+            uri = self.get(name)
+            uri.publishers.pop(registration_id, None)
 
-        for topic_name, subscription_id in connection.topics.get("subscriber", {}).items():
-            topic = self.get(topic_name)
-            topic.remove_subscriber(subscription_id)
+        for name, registration_id in connection.topics.get("subscriber", {}).items():
+            uri = self.get(uri)
+            uri.remove_subscriber(registration_id)
 
-    def get_connection(self, topic_name, subscription_id):
+    def get_connection(self, name, registration_id):
         """
-        Get topic connection provided topic_name and subscription_id. Try to find
+        Get topic connection provided uri and subscription_id. Try to find
         it in subscribers, otherwise, fetches from publishers.
         Return None if it is not available in any.
         """
-        topic = self[topic_name]
-        return topic.subscribers.get(subscription_id) or topic.publishers.get(subscription_id)
+        uri = self[name]
+        return uri.subscribers.get(registration_id) or uri.publishers.get(registration_id)
 
     @property
     def dict(self):
@@ -131,18 +146,12 @@ uri_registry = URIManager()
 
 class URI(object):
     """
-    Represent a URI, containing its name, subscribers and publishers, or provider connections.
+    Represent a URI.  This should probably be mostly used through the subclasses.
     """
-    def __init__(self, name, rpc=False, provider=None, redis=None):
+    def __init__(self, name, uri_type, redis=None):
         self.registration_id=create_global_id()
         self.name = name
-        if rpc:
-            self.rpc = rpc
-            assert provider is not None
-            self.provider = provider
-        else:
-            self.subscribers = {}
-            self.publishers = {}
+        self.uri_type = uri_type
         self.redis_params = redis
         if self.redis_params is not None:
             self._publisher_connection = tornadis.Client(ioloop=ioloop.IOLoop.current(), autoconnect=True, **self.redis_params)
@@ -155,47 +164,42 @@ class URI(object):
             self._publisher_connection = None
         self._subscriber_connection = None
 
+    def _on_event_message(self, uri, raw_msg):
+        msg = messages.BroadcastMessage.from_text(raw_msg.decode("utf-8"))
+        assert_msg = "broadcast message topic and redis pub/sub queue must match ({} != {})".format(uri, msg.uri)
+        assert uri == msg.uri, assert_msg
+        if msg.publisher_node_id != messages.PUBLISHER_NODE_ID.hex:
+            customize.deliver_event_messages(self, msg.event_message, None)
+
+    def _on_redis_message(self, fut):
+        result = fut.result()
+        if isinstance(result, tornadis.ConnectionError) or isinstance(result, tornadis.ClientError):
+            # Connection with redis was lost
+            self._drop_subscribers()
+        elif result is not None:
+            self._register_redis_callback()
+            type_, uri, raw_msg = result
+            assert type_.decode("utf-8") == u"message", "got wrong message type from pop_message: {}".format(type_)
+            self._on_event_message(uri.decode('utf-8'), raw_msg)
+        else:
+            self._register_redis_callback()
+
+class Topic(URI):
+    """
+    A topic URI for use with pub/sub functionality.
+    """
+
+    def __init__(name, redis=None):
+        super().__init__(self, name, URIType.TOPIC, redis=redis)
+        self.subscribers = {}
+        self.publishers = {}
+
     @property
     def connections(self):
         """
         Return a set of topic connections - no matter if they are subscribers or publishers.
         """
-        # About merging two dictionaries without changing the original one:
-
-        # first version:
-        # dict(self.subscribers, **self.publishers)
-        # but it doesn't work with Python 3.5 if keyword args aren't strings
-
-        # cool fancy Python3.5 way:
-        # {**self.subscribers, **self.publishers}
-
-        # Python 2+3 boring compatible way:
-        conns = self.subscribers.copy()
-        conns.update(self.publishers)
-        return conns
-
-    @property
-    def dict(self):
-        """
-        Return a dict that is serializable.
-        """
-        subscribers = {subscription_id: conn.dict for subscription_id, conn in self.subscribers.items()}
-        publishers = {subscription_id: conn.dict for subscription_id, conn in self.publishers.items()}
-        data = {
-            "name": self.name,
-            "subscribers": subscribers,
-            "publishers": publishers
-        }
-        return data
-
-    def invoke(self, msg):
-        """
-        Send an INVOCATION message to the provider.
-        """
-        assert self.rpc == True
-        request_id = msg.request_id         # Read the message id from the message.  We just trust that this has been generated correctly.
-
-        self.provider.write_message(msg)
+        return {**self.subscribers, **self.publishers}
 
     def publish(self, broadcast_msg):
         """
@@ -254,6 +258,20 @@ class URI(object):
             self._register_redis_callback()
         self.subscribers[subscription_id] = connection
 
+    @property
+    def dict(self):
+        """
+        Return a dict that is serializable.
+        """
+        subscribers = {subscription_id: conn.dict for subscription_id, conn in self.subscribers.items()}
+        publishers = {subscription_id: conn.dict for subscription_id, conn in self.publishers.items()}
+        data = {
+            "name": self.name,
+            "subscribers": subscribers,
+            "publishers": publishers
+        }
+        return data
+
     def _register_redis_callback(self):
         """
         Listens for new messages. If connection was dropped, then disconnect
@@ -279,25 +297,6 @@ class URI(object):
             subscriber = self.remove_subscriber(subscriber_id)
             subscriber._websocket.close()
 
-    def _on_event_message(self, topic_name, raw_msg):
-        msg = messages.BroadcastMessage.from_text(raw_msg.decode("utf-8"))
-        assert_msg = "broadcast message topic and redis pub/sub queue must match ({} != {})".format(topic_name, msg.topic_name)
-        assert topic_name == msg.topic_name, assert_msg
-        if msg.publisher_node_id != messages.PUBLISHER_NODE_ID.hex:
-            customize.deliver_event_messages(self, msg.event_message, None)
-
-    def _on_redis_message(self, fut):
-        result = fut.result()
-        if isinstance(result, tornadis.ConnectionError) or isinstance(result, tornadis.ClientError):
-            # Connection with redis was lost
-            self._drop_subscribers()
-        elif result is not None:
-            self._register_redis_callback()
-            type_, topic_name, raw_msg = result
-            assert type_.decode("utf-8") == u"message", "got wrong message type from pop_message: {}".format(type_)
-            self._on_event_message(topic_name.decode('utf-8'), raw_msg)
-        else:
-            self._register_redis_callback()
 
     def _disconnect_publisher(self):
         """
@@ -306,3 +305,46 @@ class URI(object):
         """
         if self._publisher_connection is not None:
             self._publisher_connection.disconnect()
+
+
+class Procedure(URI):
+    """
+    An RPC URI.
+    """
+
+    def __init__(self, name, provider):
+        super().__init__(name, URIType.PROCEDURE)
+        self.provider = provider
+
+    @property
+    def connections(self):
+        """
+        Returns the provider.  There is always exactly one.
+        """
+        return {self.registration_id: self.provider}
+
+    def invoke(self, msg):
+        """
+        Send an INVOCATION message to the provider.
+        """
+        request_id = msg.request_id         # Read the message id from the message.  We just trust that this has been generated correctly.
+
+        self.provider.write_message(msg)
+
+
+class Error(URI):
+    """
+    An Error is a type of URI that cannot be invoked, subscribed to, or published to.  However, they are also completely stateless,
+    kept distinct from other URIs by convention, and cannot reasonably be registered ahead of time in the URIManager because no list
+    of them could every be considered complete.  Therefore, the only registered Errors are going to be those defined by the standard
+    and held by the broker, to prevent anything else from being registered on them.
+
+    https://wamp-proto.org/_static/gen/wamp_latest.html#predefined-uris
+    """
+
+    def __init__(self, name):
+        super(URI, self).__init__(name, URIType.ERROR)
+
+    # Errors don't have connections, so this is always empty.  Provided to for compatibility with Topics and Procedures.
+    connections = {}
+

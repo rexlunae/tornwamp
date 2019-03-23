@@ -59,7 +59,7 @@ class RegisterProcessor(Processor):
         answer.error(msg)
 
         if allow:
-            registration_id = uri_registry.add_rpc(full_message.topic, self.connection, invoke=customize.invoke)
+            registration_id = uri_registry.create_rpc(full_message.topic, self.connection, invoke=customize.invoke)
             answer = RPCRegisteredMessage(
                 request_id=full_message.request_id,
                 registration_id=registration_id,
