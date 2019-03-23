@@ -55,3 +55,4 @@ target/
 
 # vim
 *.sw[po]
+.vscode/settings.json
