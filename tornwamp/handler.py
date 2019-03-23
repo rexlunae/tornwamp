@@ -6,7 +6,8 @@ from tornado.websocket import WebSocketHandler
 
 from warnings import warn
 
-from tornwamp import customize, session, topic
+from tornwamp import customize, session
+from tornwamp.uri.manager import uri_registry
 from tornwamp.messages import AbortMessage, Message
 from tornwamp.processors import UnhandledProcessor
 
@@ -99,7 +100,8 @@ class WAMPHandler(WebSocketHandler):
         Remove connection from connection's manager.
         """
         if self.connection:
-            topic.topics.remove_connection(self.connection)
+            uri_registry.remove_connection(self.connection)
+            # XXX - Add procedure cleanup.
         return session.connections.pop(self.connection.id, None) if self.connection else None
 
     def open(self):
