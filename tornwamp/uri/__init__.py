@@ -7,6 +7,15 @@ import tornadis
 from tornwamp import messages
 from tornwamp.identifier import create_global_id
 
+# XXX - TODO:
+#The following algorithm MUST be applied to find a single RPC registration to which a call is routed:
+#Check for exact matching registration. If this match exists — use it.
+#If there are prefix-based registrations, find the registration with the longest prefix match. Longest means it has more URI components matched, e.g. for call URI a1.b2.c3.d4 registration a1.b2.c3 has higher priority than registration a1.b2. If this match exists — use it.
+#If there are wildcard-based registrations, find the registration with the longest portion of URI components matched before each wildcard. E.g. for call URI a1.b2.c3.d4 registration a1.b2..d4 has higher priority than registration a1...d4, see below for more complex examples. If this match exists — use it.
+#If there is no exact match, no prefix match, and no wildcard match, then Dealer MUST return ERROR wamp.error.no_such_procedure.
+
+
+
 # https://wamp-proto.org/_static/gen/wamp_latest.html#identifiers
 class URIType(Enum):
     """
