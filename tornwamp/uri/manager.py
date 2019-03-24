@@ -29,6 +29,7 @@ class URIManager(dict):
         new_uri = Error(name)
         uri = self.get(name, new_uri)
         self[name] = uri
+        return self[name]
 
 
     def create_rpc(self, name, connection, invoke=None):
