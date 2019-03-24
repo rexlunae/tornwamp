@@ -7,6 +7,7 @@ from tornado.websocket import WebSocketHandler
 from warnings import warn
 
 from tornwamp import session
+from tornwamp.identifier import create_global_id
 from tornwamp.uri.manager import URIManager
 from tornwamp.messages import AbortMessage, Code, Message
 from tornwamp.processors import UnhandledProcessor, GoodbyeProcessor, HelloProcessor, pubsub, rpc
@@ -14,20 +15,23 @@ from tornwamp.processors import UnhandledProcessor, GoodbyeProcessor, HelloProce
 BINARY_PROTOCOL = 'wamp.2.msgpack'
 JSON_PROTOCOL = 'wamp.2.json'
 
+
 class ErrorStruct:
     def __init__(self, **entries):
         self.__dict__.update(entries)
 
-class WAMPHandler(WebSocketHandler):
-    """
-    WAMP WebSocket Handler.
-    """
+realms = {}
 
-    def __init__(self, *args, preferred_protocol=BINARY_PROTOCOL, **kargs):
-        self.connection = None
-        self.preferred_protocol = preferred_protocol
+
+class WAMPRealm(dict):
+    """
+    Represents a realm in WAMP parlance.  Connections within a realm can see and communicate with each other, those outside it cannot.
+    """
+    def __init__(self, name):
+        self.name = name
+        self.handlers = {}
+
         self.uri_registry = URIManager()
-        super(WAMPHandler, self).__init__(*args, **kargs)
 
         self.errors = ErrorStruct(**{
             # The first two of these aren't technically errors, but just messages used in closing a connection.  But close enough.
@@ -59,12 +63,65 @@ class WAMPHandler(WebSocketHandler):
 
         })
 
+    #def __del__(self):
+    #    del realms[self.name]
+
+    def register_handler(self, handler):
+        """
+        Add the handler to the realm.
+        """
+        id = create_global_id()
+        self.handlers[id] = handler
+        return id
+
+    def deregister_handler(self, id):
+        """
+        Remove the handler from the realm.  If the handler is the only one in the realm, the realm itself will be cleaned up.
+        """
+        del self.handlers[id]
+        if len(self.handlers) == 0:
+            del realms[self.name]
+
+
+
+class WAMPHandler(WebSocketHandler):
+    """
+    WAMP WebSocket Handler.  There is one of these per connection, so this is only an object to handle a single connection.
+    """
+
+    def __init__(self, *args, preferred_protocol=BINARY_PROTOCOL, **kargs):
+        self.connection = None
+        self.preferred_protocol = preferred_protocol
+        super(WAMPHandler, self).__init__(*args, **kargs)
+
+    def on_close(self):
+        """
+        Overrides the base class to clean up our connections and registrations.
+        """
+        print("closing..." + repr(self))
+        self.realm.uri_registry.remove_connection(self.connection)
+        self.realm.deregister_handler(self.realm_id)
+        super().on_close()
+
+    def attach_realm(self, name):
+        """
+        Attached the connection to a given realm.  Each connection can be attached to one and only one realm.
+        This function can be overridden to add access controls to it.
+        """
+        if not name in realms:
+            realms[name] = WAMPRealm(name)
+
+        self.realm_id = realms[name].register_handler(self)
+
+        # Doubly-linked
+        self.realm = realms[name]
+
     def abort(self, handler, error_msg, details, reason=None):
         """
         Used to abort a connection while the user is trying to establish it.
         """
         if reason is None:
-            abort_message = AbortMessage(reason=self.not_authorized.to_uri())
+            abort_message = AbortMessage(reason=self.realm.not_authorized.to_uri())
 
         abort_message.error(error_msg, details)
         handler.write_message(abort_message.json)
@@ -126,19 +183,18 @@ class WAMPHandler(WebSocketHandler):
         """
         return True, {}, ""
 
-    def register_connection(self):
+    def register_connection(self, connection):
         """
         Add connection to connection's manager.
         """
-        session.connections[self.connection.id] = self.connection
+        session.connections[connection.id] = connection
 
     def deregister_connection(self):
         """
         Remove connection from connection's manager.
         """
         if self.connection:
-            self.uri_registry.remove_connection(self.connection)
-            # XXX - Add procedure cleanup.
+            self.realm.uri_registry.remove_connection(self.connection)
         return session.connections.pop(self.connection.id, None) if self.connection else None
 
     def open(self):
@@ -150,7 +206,7 @@ class WAMPHandler(WebSocketHandler):
         authorized, details, error_msg = self.authorize()
         if authorized:
             self.connection = session.ClientConnection(self, **details)
-            self.register_connection()
+            self.register_connection(self.connection)
         else:
             self.abort(self, error_msg, details)
 
@@ -209,7 +265,7 @@ class WAMPHandler(WebSocketHandler):
 
     def broadcast_messages(self, processor):
         for msg in processor.broadcast_messages:
-            topic = self.uri_registry.get(msg.topic_name)
+            topic = self.realm.uri_registry.get(msg.topic_name)
 
             # Only publish if there is someone listening.
             if topic is not None:

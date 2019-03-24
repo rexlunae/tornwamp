@@ -68,7 +68,7 @@ class UnhandledProcessor(Processor):
         out_message = ErrorMessage(
             request_code=message.code,
             request_id=message.id,
-            uri=self.handler.errors.unsupported.to_uri()
+            uri=self.handler.realm.errors.unsupported.to_uri()
         )
         out_message.error(description)
         self.answer_message = out_message
@@ -82,9 +82,10 @@ class HelloProcessor(Processor):
         """
         Return WELCOME message based on the input HELLO message.
         """
-        # hello_message = HelloMessage(*self.message.value)
-        # TODO: assert realm is in allowed list
+        hello_message = HelloMessage(*self.message.value)
         welcome_message = WelcomeMessage()
+        print(repr(self.message))
+        self.handler.attach_realm(hello_message.realm)
         self.answer_message = welcome_message
 
 

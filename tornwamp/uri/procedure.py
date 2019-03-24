@@ -6,7 +6,7 @@ from tornwamp.uri import URI, URIType
 
 class Procedure(URI):
     """
-    An RPC URI.
+    A RPC URI.
     """
 
     def __init__(self, name, provider):

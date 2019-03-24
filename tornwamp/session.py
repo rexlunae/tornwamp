@@ -6,7 +6,7 @@ import errno
 
 from datetime import datetime
 
-from tornwamp import topic
+from tornwamp.uri import topic
 from tornwamp.identifier import create_global_id
 
 
@@ -61,9 +61,10 @@ class ClientConnection(object):
 
         # communication-related
         self._websocket = websocket
-        self.topics = {
+        self.uris = {
             "subscriber": {},
-            "publisher": {}
+            "publisher": {},
+            "rpcs": {},
         }
 
         # when connection should be closed but something is left
@@ -99,46 +100,46 @@ class ClientConnection(object):
         """
         Return connection's subscription_id for a specific topic.
         """
-        subscribe_subscription = self.topics['subscriber'].get(topic_name)
-        publish_subscription = self.topics['publisher'].get(topic_name)
+        subscribe_subscription = self.uris['subscriber'].get(topic_name)
+        publish_subscription = self.uris['publisher'].get(topic_name)
         return subscribe_subscription or publish_subscription
 
     def add_subscription_channel(self, subscription_id, topic_name):
         """
         Add topic as a subscriber.
         """
-        self.topics["subscriber"][topic_name] = subscription_id
+        self.uris["subscriber"][topic_name] = subscription_id
 
     def remove_subscription_channel(self, topic_name):
         """
         Remove topic as a subscriber.
         """
-        self.topics.get("subscriber", {}).pop(topic_name, None)
+        self.uris.get("subscriber", {}).pop(topic_name, None)
 
     def add_publishing_channel(self, subscription_id, topic_name):
         """
         Add topic as a publisher.
         """
-        self.topics["publisher"][topic_name] = subscription_id
+        self.uris["publisher"][topic_name] = subscription_id
 
     def remove_publishing_channel(self, topic_name):
         """
         Remove topic as a publisher.
         """
-        self.topics.get("publisher", {}).pop(topic_name, None)
+        self.uris.get("publisher", {}).pop(topic_name, None)
 
     def get_publisher_topics(self):
         """
         Return list of topics to which this connection has subscribed.
         """
-        return list(self.topics["publisher"])
+        return list(self.uris["publisher"])
 
     def get_topics(self):
         """
         Return a dictionary containing subscriptions_ids and connections - no
         matter if they are subscribers or publishers.
         """
-        return dict(self.topics["subscriber"], **self.topics["publisher"])
+        return dict(self.uris["subscriber"], **self.uris["publisher"])
 
     @property
     def topics_by_subscription_id(self):

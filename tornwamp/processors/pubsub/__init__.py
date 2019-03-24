@@ -18,7 +18,7 @@ class SubscribeProcessor(Processor):
         received_message = SubscribeMessage(*self.message.value)
         allow, msg = customize.authorize_subscription(received_message.topic, self.connection)
         if allow:
-            subscription_id = self.handler.uri_registry.add_subscriber(
+            subscription_id = self.handler.realm.uri_registry.add_subscriber(
                 received_message.topic,
                 self.connection,
             )
@@ -31,7 +31,7 @@ class SubscribeProcessor(Processor):
             answer = ErrorMessage(
                 request_id=received_message.request_id,
                 request_code=received_message.code,
-                uri=self.handler.unauthorized.to_uri()
+                uri=self.handler.realm.unauthorized.to_uri()
             )
             answer.error(msg)
         self.answer_message = answer
@@ -63,7 +63,7 @@ class PublishProcessor(Processor):
             answer = ErrorMessage(
                 request_id=received_message.request_id,
                 request_code=received_message.code,
-                uri=self.handler.errors.unauthorized.to_uri()
+                uri=self.handler.realm.errors.unauthorized.to_uri()
             )
             answer.error(msg)
         self.answer_message = answer

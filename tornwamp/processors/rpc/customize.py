@@ -23,7 +23,7 @@ def authorize_registration(topic_name, handler):
     assert handler.connection, "authorize_registration requires connection"
 
     if topic_name in procedures:
-        return False, "Procedure {} already defined".format(topic_name), handler.errors.procedure_already_exists.to_uri()
+        return False, "Procedure {} already defined".format(topic_name), handler.realm.errors.procedure_already_exists.to_uri()
 
     return True, '', ''
 
@@ -36,11 +36,11 @@ def invoke(handler, call_message, connection, args, kwargs, *_trailing):
     sent to us, we will send it back to the caller, but the only time we can directly
     respond synchronously is if there is an error.
     """
-    topic = handler.uri_registry.get(call_message.procedure)
+    topic = handler.realm.uri_registry.get(call_message.procedure)
 
     # Check that the procedure called has been registered.
     if topic is None:
-        return ErrorMessage(request_code=Code.CALL, request_id=call_message.request_id, uri=handler.errors.no_such_procedure.to_uri())
+        return ErrorMessage(request_code=Code.CALL, request_id=call_message.request_id, uri=handler.realm.errors.no_such_procedure.to_uri())
     else:
         # Create INVOCATION message to the client that registered the RPC.
         invoke_msg = InvocationMessage(registration_id=topic.registration_id, details=call_message.details, args=args, kwargs=kwargs)

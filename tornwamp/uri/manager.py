@@ -97,13 +97,16 @@ class URIManager(dict):
         """
         Connection is to be removed, scrap all connection publishers/subscribers in every topic
         """
-        for name, registration_id in connection.topics.get("publisher", {}).items():
+        for name, registration_id in connection.uris.get("publisher", {}).items():
             uri = self.get(name)
             uri.publishers.pop(registration_id, None)
 
-        for name, registration_id in connection.topics.get("subscriber", {}).items():
-            uri = self.get(uri)
+        for name, registration_id in connection.uris.get("subscriber", {}).items():
+            uri = self.get(name)
             uri.remove_subscriber(registration_id)
+
+        for name, registration_id in connection.uris.get("rpcs", {}).items():
+            uri = self.pop(name, None)
 
     def get_connection(self, name, registration_id):
         """

@@ -27,7 +27,7 @@ class YieldProcessor(Processor):
         (destination_connection, date) = customize.request_ids.pop(yield_message.request_id, None)
 
         if destination_connection is None:
-            return ErrorMessage(request_code=Code.YIELD, request_id=yield_message.request_id, uri=self.handler.errors.not_pending.to_uri())
+            return ErrorMessage(request_code=Code.YIELD, request_id=yield_message.request_id, uri=self.handler.realm.errors.not_pending.to_uri())
         elif destination_connection.zombie:
             warn('Lost connection before response' + str(yield_message.value))
         else:
@@ -59,7 +59,7 @@ class RegisterProcessor(Processor):
         answer.error(msg)
 
         if allow:
-            registration_id = self.handler.uri_registry.create_rpc(full_message.topic, self.connection, invoke=customize.invoke)
+            registration_id = self.handler.realm.uri_registry.create_rpc(full_message.topic, self.connection, invoke=customize.invoke)
             answer = RPCRegisteredMessage(
                 request_id=full_message.request_id,
                 registration_id=registration_id,
@@ -92,7 +92,7 @@ class CallProcessor(Processor):
                 request_code=msg.code,
                 request_id=msg.request_id,
                 details={"call": msg.json},
-                uri=self.handler.errors.no_such_procedure.to_uri()
+                uri=self.handler.realm.errors.no_such_procedure.to_uri()
             )
             response_msg.error("The procedure {} doesn't exist".format(msg.procedure))
             self.answer_message = response_msg
