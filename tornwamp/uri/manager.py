@@ -6,8 +6,6 @@ from tornwamp.uri.error import Error
 from tornwamp.identifier import create_global_id
 
 
-
-
 class URIManager(dict):
     """
     Manages all existing topics to which connections can potentially
@@ -123,6 +121,4 @@ class URIManager(dict):
         """
         return {k: topic.dict for k, topic in self.items()}
 
-# Generally, we should only have one uri manager.  And this is it.
-uri_registry = URIManager()
 

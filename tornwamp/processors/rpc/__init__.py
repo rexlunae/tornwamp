@@ -10,7 +10,6 @@ from warnings import warn
 
 from tornado import gen
 
-from tornwamp.uri.manager import uri_registry
 from tornwamp.messages import CallMessage, RPCRegisterMessage, RPCRegisteredMessage, ResultMessage, ErrorMessage, EventMessage, YieldMessage
 from tornwamp.processors import Processor
 from tornwamp.processors.rpc import customize
@@ -28,7 +27,7 @@ class YieldProcessor(Processor):
         (destination_connection, date) = customize.request_ids.pop(yield_message.request_id, None)
 
         if destination_connection is None:
-            return ErrorMessage(request_code=Code.YIELD, request_id=yield_message.request_id, uri='wamp.not.pending')
+            return ErrorMessage(request_code=Code.YIELD, request_id=yield_message.request_id, uri=self.handler.errors.not_pending.to_uri())
         elif destination_connection.zombie:
             warn('Lost connection before response' + str(yield_message.value))
         else:
@@ -56,12 +55,12 @@ class RegisterProcessor(Processor):
         answer = ErrorMessage(
             request_id=full_message.request_id,
             request_code=full_message.code,
-            uri="tornwamp.register.unauthorized"
+            uri=self.handler.errors.not_authorized.to_uri()
         )
         answer.error(msg)
 
         if allow:
-            registration_id = uri_registry.create_rpc(full_message.topic, self.connection, invoke=customize.invoke)
+            registration_id = self.handler.uri_registry.create_rpc(full_message.topic, self.connection, invoke=customize.invoke)
             answer = RPCRegisteredMessage(
                 request_id=full_message.request_id,
                 registration_id=registration_id,
@@ -88,13 +87,13 @@ class CallProcessor(Processor):
         msg = CallMessage(*self.message.value)
         if msg.procedure in customize.procedures:
             [method, args, kwargs] = customize.procedures[msg.procedure]
-            self.answer_message = method(msg, self.connection, [*msg.args, *args], { **msg.kwargs, **kwargs })
+            self.answer_message = method(self.handler, msg, self.connection, [*msg.args, *args], { **msg.kwargs, **kwargs })
         else:
             response_msg = ErrorMessage(
                 request_code=msg.code,
                 request_id=msg.request_id,
                 details={"call": msg.json},
-                uri="wamp.rpc.unsupported.procedure"
+                uri=self.handler.errors.no_such_procedure.to_uri()
             )
             response_msg.error("The procedure {} doesn't exist".format(msg.procedure))
             self.answer_message = response_msg

@@ -6,8 +6,6 @@ from tornwamp.identifier import create_global_id
 from tornwamp.messages import ErrorMessage, EventMessage, PublishMessage, PublishedMessage, SubscribeMessage, SubscribedMessage, BroadcastMessage
 from tornwamp.processors import Processor
 from tornwamp.processors.pubsub import customize
-from tornwamp.uri.manager import uri_registry
-
 
 class SubscribeProcessor(Processor):
     """
@@ -20,7 +18,7 @@ class SubscribeProcessor(Processor):
         received_message = SubscribeMessage(*self.message.value)
         allow, msg = customize.authorize_subscription(received_message.topic, self.connection)
         if allow:
-            subscription_id = uri_registry.add_subscriber(
+            subscription_id = self.handler.uri_registry.add_subscriber(
                 received_message.topic,
                 self.connection,
             )
@@ -33,7 +31,7 @@ class SubscribeProcessor(Processor):
             answer = ErrorMessage(
                 request_id=received_message.request_id,
                 request_code=received_message.code,
-                uri="tornwamp.subscribe.unauthorized"
+                uri=self.handler.unauthorized.to_uri()
             )
             answer.error(msg)
         self.answer_message = answer
@@ -65,7 +63,7 @@ class PublishProcessor(Processor):
             answer = ErrorMessage(
                 request_id=received_message.request_id,
                 request_code=received_message.code,
-                uri="tornwamp.publish.unauthorized"
+                uri=self.handler.errors.unauthorized.to_uri()
             )
             answer.error(msg)
         self.answer_message = answer

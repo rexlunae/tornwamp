@@ -6,23 +6,17 @@ from tornado.websocket import WebSocketHandler
 
 from warnings import warn
 
-from tornwamp import customize, session
-from tornwamp.uri.manager import uri_registry
-from tornwamp.messages import AbortMessage, Message
-from tornwamp.processors import UnhandledProcessor
+from tornwamp import session
+from tornwamp.uri.manager import URIManager
+from tornwamp.messages import AbortMessage, Code, Message
+from tornwamp.processors import UnhandledProcessor, GoodbyeProcessor, HelloProcessor, pubsub, rpc
 
 BINARY_PROTOCOL = 'wamp.2.msgpack'
 JSON_PROTOCOL = 'wamp.2.json'
 
-def abort(handler, error_msg, details, reason='tornwamp.error.unauthorized'):
-    """
-    Used to abort a connection while the user is trying to establish it.
-    """
-    abort_message = AbortMessage(reason=reason)
-    abort_message.error(error_msg, details)
-    handler.write_message(abort_message.json)
-    handler.close(1, error_msg)
-
+class ErrorStruct:
+    def __init__(self, **entries):
+        self.__dict__.update(entries)
 
 class WAMPHandler(WebSocketHandler):
     """
@@ -32,7 +26,50 @@ class WAMPHandler(WebSocketHandler):
     def __init__(self, *args, preferred_protocol=BINARY_PROTOCOL, **kargs):
         self.connection = None
         self.preferred_protocol = preferred_protocol
+        self.uri_registry = URIManager()
         super(WAMPHandler, self).__init__(*args, **kargs)
+
+        self.errors = ErrorStruct(**{
+            # The first two of these aren't technically errors, but just messages used in closing a connection.  But close enough.
+            'close_realm': self.uri_registry.create_error('wamp.close.close_realm'),
+            'goodbye_and_out': self.uri_registry.create_error('wamp.close.goodbye_and_out'),
+
+            # These are the errors that are required and standardized by WAMP Protocol standard
+            'invalid_uri': self.uri_registry.create_error('wamp.error.invalid_uri'),
+            'no_such_procedure': self.uri_registry.create_error('wamp.error.no_such_procedure'),
+            'procedure_already_exists': self.uri_registry.create_error('wamp.error.procedure_already_exists'),
+            'no_such_registration': self.uri_registry.create_error('wamp.error.no_such_registration'),
+            'no_such_subscript': self.uri_registry.create_error('wamp.error.no_such_subscription'),
+            'invalid_argument': self.uri_registry.create_error('wamp.error.invalid_argument'),
+            'system_shutdown': self.uri_registry.create_error('wamp.close.system_shutdown'),
+            'protocol_violation': self.uri_registry.create_error('wamp.error.protocol_violation'),
+            'not_authorized': self.uri_registry.create_error('wamp.error.not_authorized'),
+            'authorization_failed': self.uri_registry.create_error('wamp.error.authorization_failed'),
+            'no_such_realm': self.uri_registry.create_error('wamp.error.no_such_realm'),
+            'no_such_role': self.uri_registry.create_error('wamp.error.no_such_role'),
+            'cancelled': self.uri_registry.create_error('wamp.error.canceled'),
+            'option_not_allowed': self.uri_registry.create_error('wamp.error.option_not_allowed'),
+            'no_eligible_callee': self.uri_registry.create_error('wamp.error.no_eligible_callee'),
+            'option_disallowed__disclose_me': self.uri_registry.create_error('wamp.error.option_disallowed.disclose_me'),
+            'network_failure': self.uri_registry.create_error('wamp.error.network_failure'),
+
+            # These aren't part of the WAMP standard, but I use them, so here they are.
+            'not_pending': self.uri_registry.create_error('wamp.error.not_pending'),     # Sent if we get a YIELD message but there is no call pending.
+            'unsupported': self.uri_registry.create_error('wamp.error.unsupported'),    # Sent when we get a message that we don't recognize.
+
+        })
+
+    def abort(self, handler, error_msg, details, reason=None):
+        """
+        Used to abort a connection while the user is trying to establish it.
+        """
+        if reason is None:
+            abort_message = AbortMessage(reason=self.not_authorized.to_uri())
+
+        abort_message.error(error_msg, details)
+        handler.write_message(abort_message.json)
+        handler.close(1, error_msg)
+
 
     supported_protocols = {
         JSON_PROTOCOL: True,
@@ -100,7 +137,7 @@ class WAMPHandler(WebSocketHandler):
         Remove connection from connection's manager.
         """
         if self.connection:
-            uri_registry.remove_connection(self.connection)
+            self.uri_registry.remove_connection(self.connection)
             # XXX - Add procedure cleanup.
         return session.connections.pop(self.connection.id, None) if self.connection else None
 
@@ -115,7 +152,7 @@ class WAMPHandler(WebSocketHandler):
             self.connection = session.ClientConnection(self, **details)
             self.register_connection()
         else:
-            abort(self, error_msg, details)
+            self.abort(self, error_msg, details)
 
     async def on_message(self, txt):
         """
@@ -125,17 +162,59 @@ class WAMPHandler(WebSocketHandler):
         tornwamp.customize module.
         """
         msg = self.read_message(txt)
-        Processor = customize.processors.get(msg.code, UnhandledProcessor)
-        processor = Processor(msg, self.connection)
+        Processor = self.processors.get(msg.code, UnhandledProcessor)
+        processor = Processor(msg, self)
 
         if self.connection and not self.connection.zombie:  # TODO: cover branch else
             if processor.answer_message is not None:
                 self.write_message(processor.answer_message)
 
-        customize.broadcast_messages(processor)
+        self.broadcast_messages(processor)
 
         if processor.must_close:
             self.close(processor.close_code, processor.close_reason)
+
+
+
+    processors = {
+        Code.HELLO: HelloProcessor,
+        Code.GOODBYE: GoodbyeProcessor,
+        Code.SUBSCRIBE: pubsub.SubscribeProcessor,
+        Code.CALL: rpc.CallProcessor,
+        Code.REGISTER: rpc.RegisterProcessor,
+        Code.PUBLISH: pubsub.PublishProcessor,
+        Code.YIELD: rpc.YieldProcessor,
+    }
+#    2: 'welcome',
+#    3: 'abort',
+#    4: 'challenge',
+#    5: 'authenticate',
+#    7: 'heartbeat',
+#    8: 'error',
+#    17: 'published',
+#    33: 'subscribed',
+#    34: 'unsubscribe',
+#    35: 'unsubscribed',
+#    36: 'event',
+#    49: 'cancel',
+#    50: 'result',
+#    64: 'register',
+#    65: 'registered',
+#    66: 'unregister',
+#    67: 'unregistered',
+#    68: 'invocation',
+#    69: 'interrupt',
+#    70: 'yield'
+
+
+    def broadcast_messages(self, processor):
+        for msg in processor.broadcast_messages:
+            topic = self.uri_registry.get(msg.topic_name)
+
+            # Only publish if there is someone listening.
+            if topic is not None:
+                topic.publish(msg)
+
 
     def close(self, code=None, reason=None):
         """

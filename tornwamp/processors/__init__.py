@@ -10,7 +10,6 @@ from tornado import gen
 
 from tornwamp.messages import Message, ErrorMessage, GoodbyeMessage, HelloMessage, WelcomeMessage
 
-
 class Processor(six.with_metaclass(abc.ABCMeta)):
     """
     Abstract class which defines the base behavior for processing messages
@@ -20,13 +19,14 @@ class Processor(six.with_metaclass(abc.ABCMeta)):
     """
     __metaclass__ = abc.ABCMeta
 
-    def __init__(self, message, connection):
+    def __init__(self, message, handler):
         """
-        msg: json
-        session_id: string or number
+        message: json
+        handler: handler object
         """
-        self.session_id = getattr(connection, "id", None)
-        self.connection = connection
+        self.session_id = getattr(handler.connection, "id", None)
+        self.connection = handler.connection
+        self.handler = handler
 
         # message just received by the WebSocket
         self.message = message
@@ -68,7 +68,7 @@ class UnhandledProcessor(Processor):
         out_message = ErrorMessage(
             request_code=message.code,
             request_id=message.id,
-            uri='wamp.unsupported.message'
+            uri=self.handler.errors.unsupported.to_uri()
         )
         out_message.error(description)
         self.answer_message = out_message

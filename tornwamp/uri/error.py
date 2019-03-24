@@ -28,9 +28,5 @@ class Error(URI):
         """
         pass
 
-    def __str__(self):
-        """
-        Allows the error to serialize to a string.
-        """
+    def to_uri(self):
         return self.name
-
