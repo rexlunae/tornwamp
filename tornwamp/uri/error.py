@@ -6,9 +6,6 @@ from enum import Enum
 
 from tornwamp.uri import URI, URIType
 
-# XXX - register these.
-
-
 class Error(URI):
     """
     An Error is a type of URI that cannot be invoked, subscribed to, or published to.  However, they are also completely stateless,
@@ -30,4 +27,10 @@ class Error(URI):
         Compatibility-only.
         """
         pass
+
+    def __str__(self):
+        """
+        Allows the error to serialize to a string.
+        """
+        return self.name
 
