@@ -14,18 +14,18 @@ from datetime import datetime
 
 from tornwamp.messages import ResultMessage, InvocationMessage, ErrorMessage, Code
 
-def authorize_registration(topic_name, connection):
+def authorize_registration(topic_name, handler):
     """
     Says if a user can register and RPC on a topic or not.
     Return: True or False and the error message ("" if no error occured).
     """
     assert topic_name, "authorize_registration requires topic_name"
-    assert connection, "authorize_registration requires connection"
+    assert handler.connection, "authorize_registration requires connection"
 
     if topic_name in procedures:
-        return False, "Procedure {} already defined".format(topic_name)
+        return False, "Procedure {} already defined".format(topic_name), handler.errors.procedure_already_exists.to_uri()
 
-    return True, ""
+    return True, '', ''
 
 # Tracks open requests.  Contains a tuple of (connection, )
 request_ids = {}
@@ -74,3 +74,4 @@ procedures = {
     'ping': [ping, [], {}],
     'invoke': [invoke, ['foo'], {'bar':'baz'}]
 }
+

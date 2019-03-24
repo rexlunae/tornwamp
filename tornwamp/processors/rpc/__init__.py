@@ -49,13 +49,12 @@ class RegisterProcessor(Processor):
 
         # We reprocess the message into a full RPCRegisterMessage to get all the methods and properties.
         full_message = RPCRegisterMessage(*self.message.value)
-        allow, msg = customize.authorize_registration(full_message.topic, self.connection)
-        
+        (allow, msg, error_uri) = customize.authorize_registration(full_message.topic, self.handler)
         # By default we send an error back.
         answer = ErrorMessage(
             request_id=full_message.request_id,
             request_code=full_message.code,
-            uri=self.handler.errors.not_authorized.to_uri()
+            uri=error_uri,
         )
         answer.error(msg)
 
