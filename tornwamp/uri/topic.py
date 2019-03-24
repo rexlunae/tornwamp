@@ -22,7 +22,7 @@ class Topic(URI):
     """
 
     def __init__(self, name, redis=None):
-        super().__init__(name, URIType.TOPIC, redis=redis)
+        super().__init__(name, URIType.TOPIC)
         self.subscribers = {}
         self.publishers = {}
         self.redis_params = redis
