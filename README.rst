@@ -76,13 +76,11 @@ This basically hooks the read and write functions of the parent class in order
 to display them.  If you don't want that, you can get the same effect with the
 base WAMPHandler class.
 
-::
+:: code-block:: python
 
     from tornado import web, ioloop
     from tornwamp.handler import WAMPHandler
-    from tornwamp.messages import Message
-    from sys import argv
-
+    
     class Router:
     
         class Handler(WAMPHandler):
@@ -98,7 +96,7 @@ base WAMPHandler class.
                 message = super().read_message(txt)
                 print('rx|' + str(self.realm_id) + '|: ' + message.json)
                 return message
-            def __init__(self, *args, default_host=None, port=1234, path=r'/ws', **kwargs):
+            def __init__(self, *args, **kwargs):
                 super().__init__(*args, **kwargs)
                 self.realm_id = 'unset'
 
