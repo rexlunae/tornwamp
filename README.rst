@@ -76,7 +76,7 @@ This basically hooks the read and write functions of the parent class in order
 to display them.  If you don't want that, you can get the same effect with the
 base WAMPHandler class.
 
-:: code:: python
+.. code:: python
 
     from tornado import web, ioloop
     from tornwamp.handler import WAMPHandler
