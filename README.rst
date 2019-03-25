@@ -103,7 +103,7 @@ base WAMPHandler class.
                 self.realm_id = 'unset'
 
     
-        def __init__(self, *args, default_host=None, port=1234, path=r'/ws', **kwargs):
+        def __init__(self, *args, default_host=None, port=8888, path=r'/ws', **kwargs):
             super().__init__(*args, **kwargs)
             self.default_host = default_host
             self.port = port
