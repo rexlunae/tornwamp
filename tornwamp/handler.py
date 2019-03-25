@@ -98,7 +98,6 @@ class WAMPHandler(WebSocketHandler):
         """
         Overrides the base class to clean up our connections and registrations.
         """
-        print("closing..." + repr(self))
         self.realm.uri_registry.remove_connection(self.connection)
         self.realm.deregister_handler(self.realm_id)
         super().on_close()
