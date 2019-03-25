@@ -6,7 +6,6 @@ import errno
 
 from datetime import datetime
 
-from tornwamp.uri import topic
 from tornwamp.identifier import create_global_id
 
 
@@ -169,4 +168,3 @@ class ClientConnection(object):
         """
         self.zombification_datetime = datetime.now().isoformat()
         self.zombie = True
-        topic.topics.remove_connection(self)
