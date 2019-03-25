@@ -58,7 +58,7 @@ class WAMPRealm(dict):
             'network_failure': self.uri_registry.create_error('wamp.error.network_failure'),
 
             # These aren't part of the WAMP standard, but I use them, so here they are.
-            'not_pending': self.uri_registry.create_error('wamp.error.not_pending'),     # Sent if we get a YIELD message but there is no call pending.
+            'not_pending': self.uri_registry.create_error('wamp.error.not_pending'),    # Sent if we get a YIELD message but there is no call pending.
             'unsupported': self.uri_registry.create_error('wamp.error.unsupported'),    # Sent when we get a message that we don't recognize.
 
         })
