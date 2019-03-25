@@ -52,13 +52,13 @@ How to install
 
 Using `pip <https://pip.pypa.io/>`_ (to be available soon):
 
-::
+.. code :: bash
 
     pip install tornwamp
 
 Or from the source-code:
 
-::
+.. code :: bash
 
     #git clone https://github.com/ef-ctx/tornwamp.git
     git clone https://github.com/rexlunae/tornwamp.git
@@ -76,7 +76,7 @@ This basically hooks the read and write functions of the parent class in order
 to display them.  If you don't want that, you can get the same effect with the
 base WAMPHandler class.
 
-.. code:: python
+.. code :: python
 
     from tornado import web, ioloop
     from tornwamp.handler import WAMPHandler
@@ -126,7 +126,7 @@ Which can be run:
 From the client perspective, you'd be able to use Autobahn JavaScript library
 to connect to the server using:
 
-::
+.. code :: javascript
 
   var connection = new autobahn.Connection({
     url: "ws://0.0.0.0:8888/ws",
