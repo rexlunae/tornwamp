@@ -84,7 +84,6 @@ class HelloProcessor(Processor):
         """
         hello_message = HelloMessage(*self.message.value)
         welcome_message = WelcomeMessage()
-        print(repr(self.message))
         self.handler.attach_realm(hello_message.realm)
         self.answer_message = welcome_message
 
