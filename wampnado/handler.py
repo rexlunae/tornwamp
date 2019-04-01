@@ -95,6 +95,17 @@ class WAMPHandler(WebSocketHandler):
         self.realm_id = 'unset'
         super(WAMPHandler, self).__init__(*args, **kargs)
 
+    processors = {
+        Code.HELLO: HelloProcessor,
+        Code.GOODBYE: GoodbyeProcessor,
+        Code.SUBSCRIBE: pubsub.SubscribeProcessor,
+        Code.CALL: rpc.CallProcessor,
+        Code.REGISTER: rpc.RegisterProcessor,
+        Code.PUBLISH: pubsub.PublishProcessor,
+        Code.YIELD: rpc.YieldProcessor,
+    }
+
+
     def on_close(self):
         """
         Overrides the base class to clean up our connections and registrations.
@@ -229,39 +240,6 @@ class WAMPHandler(WebSocketHandler):
 
         if processor.must_close:
             self.close(processor.close_code, processor.close_reason)
-
-
-
-    processors = {
-        Code.HELLO: HelloProcessor,
-        Code.GOODBYE: GoodbyeProcessor,
-        Code.SUBSCRIBE: pubsub.SubscribeProcessor,
-        Code.CALL: rpc.CallProcessor,
-        Code.REGISTER: rpc.RegisterProcessor,
-        Code.PUBLISH: pubsub.PublishProcessor,
-        Code.YIELD: rpc.YieldProcessor,
-    }
-#    2: 'welcome',
-#    3: 'abort',
-#    4: 'challenge',
-#    5: 'authenticate',
-#    7: 'heartbeat',
-#    8: 'error',
-#    17: 'published',
-#    33: 'subscribed',
-#    34: 'unsubscribe',
-#    35: 'unsubscribed',
-#    36: 'event',
-#    49: 'cancel',
-#    50: 'result',
-#    64: 'register',
-#    65: 'registered',
-#    66: 'unregister',
-#    67: 'unregistered',
-#    68: 'invocation',
-#    69: 'interrupt',
-#    70: 'yield'
-
 
     def broadcast_messages(self, processor):
         for msg in processor.broadcast_messages:
