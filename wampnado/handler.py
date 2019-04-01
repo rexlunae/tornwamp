@@ -83,17 +83,29 @@ class WAMPRealm(dict):
             del realms[self.name]
 
 
+class WAMPMetaHandler:
+    """
+    A metaclass for handlers.  Call the factory with the class of a transport.
+    Returns a class that can be instantiated by Tornado's IOloop using that transport.
 
-class WAMPHandler(WebSocketHandler):
+    WAMPMetaHandler.factory(WebSocketHandler)
     """
-    WAMP WebSocket Handler.  There is one of these per connection, so this is only an object to handle a single connection.
-    """
+    @classmethod
+    def factory(cls, transport_cls=WebSocketHandler):
+        """
+        Makes a class to handle the specified transport.
+        """
+        class A(cls, transport_cls):
+            pass
+        
+        return A
+
 
     def __init__(self, *args, preferred_protocol=BINARY_PROTOCOL, **kargs):
-        self.connection = None
         self.preferred_protocol = preferred_protocol
+        self.connection = None
         self.realm_id = 'unset'
-        super(WAMPHandler, self).__init__(*args, **kargs)
+        super().__init__(*args, **kargs)
 
     processors = {
         Code.HELLO: HelloProcessor,
@@ -165,9 +177,9 @@ class WAMPHandler(WebSocketHandler):
         Reads a message to the WebSocket in the format selected for it.
         """
         if self.protocol == JSON_PROTOCOL:
-            return super(WAMPHandler, self).write_message(msg.json)
+            return super().write_message(msg.json)
         elif self.protocol == BINARY_PROTOCOL:
-            return super(WAMPHandler, self).write_message(msg.msgpack, binary=True)
+            return super().write_message(msg.msgpack, binary=True)
         else:
             warn('unknown protocol ' + self.protocol)
 
@@ -255,11 +267,17 @@ class WAMPHandler(WebSocketHandler):
         Invoked when a WebSocket is closed.
         """
         self.deregister_connection()
-        super(WAMPHandler, self).close(code, reason)
+        super().close(code, reason)
 
-class WAMPHandlerDebug(WAMPHandler):
+
+
+class WAMPMetaHandlerDebug(WAMPMetaHandler):
     """
-    A class for debugging that prints every message.  Should be a drop-in replacement for WAMPHandler.
+    A metaclass for handlers.  Call the factory (inside the parent class)
+    with the class of a transport.  Returns a class
+    that can be instantiated by Tornado's IOloop using that transport.
+
+    WAMPMetaHandlerDebug.factory(WebSocketHandler)
     """
     def write_message(self, msg):
         result = super().write_message(msg)
@@ -270,5 +288,9 @@ class WAMPHandlerDebug(WAMPHandler):
         message = super().read_message(txt)
         print('rx|' + str(self.realm_id) + '|: ' + message.json)
         return message
+
+
+
+
 
 
