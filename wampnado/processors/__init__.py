@@ -8,7 +8,7 @@ import six
 
 from tornado import gen
 
-from tornwamp.messages import Message, ErrorMessage, GoodbyeMessage, HelloMessage, WelcomeMessage
+from wampnado.messages import Message, ErrorMessage, GoodbyeMessage, HelloMessage, WelcomeMessage
 
 class Processor(six.with_metaclass(abc.ABCMeta)):
     """

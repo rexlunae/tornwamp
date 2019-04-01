@@ -10,7 +10,7 @@ This module should be overwride subscription procedures:
   when a client publishes to a topic. The response to the client can
   also be customized with that function.
 """
-from tornwamp import messages
+from wampnado import messages
 
 
 def authorize_publication(topic_name, connection):

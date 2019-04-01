@@ -4,9 +4,9 @@ Classes and methods for Topic URIs for pub/sub
 import tornadis
 from tornado import ioloop
 
-from tornwamp import utils
-from tornwamp.uri import URI, URIType, deliver_event_messages
-from tornwamp.identifier import create_global_id
+from wampnado import utils
+from wampnado.uri import URI, URIType, deliver_event_messages
+from wampnado.identifier import create_global_id
 
 PUBSUB_TIMEOUT = 60
 PUBLISHER_CONNECTION_TIMEOUT = 3 * 3600 * 1000  # 3 hours in miliseconds

@@ -2,10 +2,10 @@
 """
 from tornado import gen
 
-from tornwamp.identifier import create_global_id
-from tornwamp.messages import ErrorMessage, EventMessage, PublishMessage, PublishedMessage, SubscribeMessage, SubscribedMessage, BroadcastMessage
-from tornwamp.processors import Processor
-from tornwamp.processors.pubsub import customize
+from wampnado.identifier import create_global_id
+from wampnado.messages import ErrorMessage, EventMessage, PublishMessage, PublishedMessage, SubscribeMessage, SubscribedMessage, BroadcastMessage
+from wampnado.processors import Processor
+from wampnado.processors.pubsub import customize
 
 class SubscribeProcessor(Processor):
     """

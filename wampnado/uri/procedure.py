@@ -2,7 +2,7 @@
 Classes and methods for Procedure URIs for RPCs. 
 """
 
-from tornwamp.uri import URI, URIType
+from wampnado.uri import URI, URIType
 
 class Procedure(URI):
     """

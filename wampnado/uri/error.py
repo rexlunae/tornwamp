@@ -4,7 +4,7 @@ A module to regularize the errors that WAMP can issue.
 
 from enum import Enum
 
-from tornwamp.uri import URI, URIType
+from wampnado.uri import URI, URIType
 
 class Error(URI):
     """

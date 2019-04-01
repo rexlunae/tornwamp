@@ -4,8 +4,8 @@ Used to handle PubSub topics publishers and subscribers
 from enum import Enum
 import tornadis
 
-from tornwamp import messages
-from tornwamp.identifier import create_global_id
+from wampnado import messages
+from wampnado.identifier import create_global_id
 
 # XXX - TODO:
 #The following algorithm MUST be applied to find a single RPC registration to which a call is routed:

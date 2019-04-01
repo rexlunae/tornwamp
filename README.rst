@@ -1,33 +1,21 @@
-.. image:: https://travis-ci.org/ef-ctx/tornwamp.svg?branch=master
-    :target: https://travis-ci.org/ef-ctx/tornwamp
 
-.. image:: https://coveralls.io/repos/github/ef-ctx/tornwamp/badge.svg?branch=master
-    :target: https://coveralls.io/github/ef-ctx/tornwamp?branch=master 
-
-.. image:: https://img.shields.io/pypi/v/tornwamp.svg
-    :target: https://pypi.python.org/pypi/tornwamp/
-
-.. image:: https://img.shields.io/pypi/pyversions/tornwamp.svg
-    :target: https://pypi.python.org/pypi/tornwamp/
-
-.. image:: https://img.shields.io/pypi/dm/tornwamp.svg
-    :target: https://pypi.python.org/pypi/tornwamp/
-
-TornWAMP
+WAMPnado
 ========
 
 This Python module implements parts of `WAMP <https://wamp-proto.org/>`_
 (Web Application Messaging Protocol).
 
-TornWAMP provides means of having an API which interacts with WAMP-clients
+WAMPnado provides means of having an API which interacts with WAMP-clients
 (e.g. `Autobahn <http://autobahn.ws/>`_).
 
-TornWAMP is a library for writing WAMP routers (both dealers and brokers)
+WAMPnado is a library for writing WAMP routers (both dealers and brokers)
 based on the Tornado `Tornado <http://www.tornadoweb.org/>`_ (Web framework).
 
 WAMP was originally designed to use WebSockets as a transport.  While the WAMP
 standard provies for other transports, this implementation is currently limited
-to WebSockets.  This may change in the future.
+to WebSockets.  This may change in the future, however, it is likely that additional
+transports may not really fit within the Tornado framework.  However, all transports
+will probably require an interface like the Tornado handler interface.
 
 WAMP originally used `JSON <https://www.json.org/>`_ for serialization.
 While this is easy, it makes for inefficient use of space with binary data.
@@ -44,27 +32,37 @@ and there are even cases where it advertises features that it definitely does no
 While the standard useage of WAMP is for a router to be just that, the mediator of
 communications but not a participant, it is my intention to fully support both that
 behavior, and also a sort of hybrid router/client mode where the router responds directly
-to RPCs and pub/sub functions.  This could greatly cut down network traffic in some
+to RPCs and pub/sub functions.  This could greatly cut down network traffic in some 
 circumstances.
+
+WAMPnado is based upon `Tornwamp <http://github.com/ef-ctx/tornwamp>`_.
+
+This software is at a very early stage of development.  While it may be suitable for certain
+tasks, the API may change at any time without warning.
 
 How to install
 ==============
 
 Using `pip <https://pip.pypa.io/>`_ (to be available soon):
 
+This doesn't work yet.  Stay tuned.
 .. code :: bash
 
-    pip install tornwamp
+    pip install wampnado
 
 Or from the source-code:
 
 .. code :: bash
 
-    #git clone https://github.com/ef-ctx/tornwamp.git
-    git clone https://github.com/rexlunae/tornwamp.git
-    cd tornwamp
+    git clone https://github.com/rexlunae/wampnado.git
+    cd wampnado
     python setup.py install
 
+This library requires Python 3.  It may install under Python 2, but it will not work.  You
+can ensure that it is installed under the correct version by specifically running python3.
+
+This library can coexist on the same Tornado router as other things.  This means that you can
+use it to develop WebSocket and RESTful HTTP applications listening on the same set of ports.
 
 
 Example of usage
@@ -79,7 +77,7 @@ base WAMPHandler class.
 .. code :: python
 
     from tornado import web, ioloop
-    from tornwamp.handler import WAMPHandler
+    from wampnado.handler import WAMPHandler
     
     class Router:
     
@@ -118,9 +116,9 @@ base WAMPHandler class.
 
 Which can be run:
 
-::
+.. code :: bash
 
-    python wamp.py
+    python3 wamp.py
 
 
 From the client perspective, you'd be able to use Autobahn JavaScript library

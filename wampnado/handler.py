@@ -6,11 +6,11 @@ from tornado.websocket import WebSocketHandler
 
 from warnings import warn
 
-from tornwamp import session
-from tornwamp.identifier import create_global_id
-from tornwamp.uri.manager import URIManager
-from tornwamp.messages import AbortMessage, Code, Message
-from tornwamp.processors import UnhandledProcessor, GoodbyeProcessor, HelloProcessor, pubsub, rpc
+from wampnado import session
+from wampnado.identifier import create_global_id
+from wampnado.uri.manager import URIManager
+from wampnado.messages import AbortMessage, Code, Message
+from wampnado.processors import UnhandledProcessor, GoodbyeProcessor, HelloProcessor, pubsub, rpc
 
 BINARY_PROTOCOL = 'wamp.2.msgpack'
 JSON_PROTOCOL = 'wamp.2.json'
@@ -214,7 +214,7 @@ class WAMPHandler(WebSocketHandler):
         Handle incoming messages on the WebSocket. Each message will be parsed
         and handled by a Processor, which can be (re)defined by the user
         changing the value of 'processors' dict, available at
-        tornwamp.customize module.
+        wampnado.customize module.
         """
         msg = self.read_message(txt)
         Processor = self.processors.get(msg.code, UnhandledProcessor)

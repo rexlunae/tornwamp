@@ -6,7 +6,7 @@ import errno
 
 from datetime import datetime
 
-from tornwamp.identifier import create_global_id
+from wampnado.identifier import create_global_id
 
 
 class ConnectionDict(dict):

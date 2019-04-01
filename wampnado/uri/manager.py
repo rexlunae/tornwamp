@@ -1,9 +1,9 @@
-from tornwamp import processors
-from tornwamp.uri import URIType
-from tornwamp.uri.topic import Topic
-from tornwamp.uri.procedure import Procedure
-from tornwamp.uri.error import Error
-from tornwamp.identifier import create_global_id
+from wampnado import processors
+from wampnado.uri import URIType
+from wampnado.uri.topic import Topic
+from wampnado.uri.procedure import Procedure
+from wampnado.uri.error import Error
+from wampnado.identifier import create_global_id
 
 
 class URIManager(dict):

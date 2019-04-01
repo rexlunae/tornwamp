@@ -12,7 +12,7 @@ from copy import deepcopy
 from enum import IntEnum
 from io import BytesIO
 
-from tornwamp.identifier import create_global_id
+from wampnado.identifier import create_global_id
 
 PUBLISHER_NODE_ID = uuid.uuid4()
 
