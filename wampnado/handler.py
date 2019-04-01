@@ -92,6 +92,7 @@ class WAMPHandler(WebSocketHandler):
     def __init__(self, *args, preferred_protocol=BINARY_PROTOCOL, **kargs):
         self.connection = None
         self.preferred_protocol = preferred_protocol
+        self.realm_id = 'unset'
         super(WAMPHandler, self).__init__(*args, **kargs)
 
     def on_close(self):
@@ -277,3 +278,19 @@ class WAMPHandler(WebSocketHandler):
         """
         self.deregister_connection()
         super(WAMPHandler, self).close(code, reason)
+
+class WAMPHandlerDebug(WAMPHandler):
+    """
+    A class for debugging that prints every message.  Should be a drop-in replacement for WAMPHandler.
+    """
+    def write_message(self, msg):
+        result = super().write_message(msg)
+        print('tx|' + str(self.realm_id) + '|: ' + msg.json)
+        return result
+
+    def read_message(self, txt):
+        message = super().read_message(txt)
+        print('rx|' + str(self.realm_id) + '|: ' + message.json)
+        return message
+
+
