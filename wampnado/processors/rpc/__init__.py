@@ -10,10 +10,10 @@ from warnings import warn
 
 from tornado import gen
 
-from tornwamp.messages import CallMessage, RPCRegisterMessage, RPCRegisteredMessage, ResultMessage, ErrorMessage, EventMessage, YieldMessage
-from tornwamp.processors import Processor
-from tornwamp.processors.rpc import customize
-from tornwamp.messages import Code
+from wampnado.messages import CallMessage, RPCRegisterMessage, RPCRegisteredMessage, ResultMessage, ErrorMessage, EventMessage, YieldMessage
+from wampnado.processors import Processor
+from wampnado.processors.rpc import customize
+from wampnado.messages import Code
 
 class YieldProcessor(Processor):
     """
@@ -73,7 +73,7 @@ class CallProcessor(Processor):
     """
     def process(self):
         """
-        Call an RPC, either defined in tornwamp.customize.procedures (dict), or a remote call to another client.
+        Call an RPC, either defined in wampnado.customize.procedures (dict), or a remote call to another client.
 
         Each method should return:
         - RESULT
