@@ -8,13 +8,6 @@ class Options(dict):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-    def __str__(self):
-        return str(self.__dict__)
-
-    def __repr__(self):
-        return repr(self.__dict__)
-    
-
 # Supported client features.
 #client_features = Options(
 #    roles=Options(
