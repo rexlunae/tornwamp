@@ -3,10 +3,36 @@ Controls which WAMP features are enabled or disabled.
 """
 
 from uuid import uuid5, NAMESPACE_OID
+from copy import deepcopy
 
 class Options(dict):
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+
+    def __getattr__(self, name):
+        return self[name]
+
+    def __setattr__(self, name, value):
+        self[name] = value
+
+    def __delattr__(self, name):
+        if name in self:
+            del self[name]
+        else:
+            raise AttributeError("No such attribute: " + name)
+
+
+    def __deepcopy__(self, memo):
+        cls = self.__class__
+        result = cls.__new__(cls)
+        memo[id(self)] = result
+        for k, v in self.items():
+            setattr(result, k, deepcopy(v, memo))
+        return result
+
+    
+
 
 # Supported client features.
 #client_features = Options(
@@ -56,9 +82,9 @@ server_features = Options(
     roles=Options(
         broker=Options(
             features=Options(
-                publisher_identification=True,
-                publisher_exclusion=True,
-                subscriber_blackwhite_listing=True,
+                #publisher_identification=True,
+                #publisher_exclusion=True,
+                #subscriber_blackwhite_listing=True,
             )
         ),
         dealer=Options(
