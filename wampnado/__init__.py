@@ -9,18 +9,6 @@ from tornado import web, ioloop
 from wampnado.handler import WAMPMetaHandler, WAMPMetaHandlerDebug
 from wampnado.transports import WebSocketTransport
 
-class ListenerParameters:
-    def __init__(self, port=None, ssl_options=None, address='localhost'):
-        if port is None:
-            if ssl_options is None:
-                port = 80
-            else:
-                port = 443
-
-        self.port = port
-        self.ssl_options = ssl_options
-        self.address = address
-
 
 class ApplicationServer:
     
@@ -34,6 +22,19 @@ class ApplicationServer:
             self.app.listen(params.port, address=params.address)
         ioloop.IOLoop.instance().start()
 
+class ListenerParameters:
+    def __init__(self, port=None, ssl_options=None, address='localhost'):
+        if port is None:
+            if ssl_options is None:
+                port = 80
+            else:
+                port = 443
+
+        self.port = port
+        self.ssl_options = ssl_options
+        self.address = address
+
+
 lp = ListenerParameters(
     port=8080
 )
@@ -42,31 +43,29 @@ lp = ListenerParameters(
 def parse_args():
     argparser = ArgumentParser()
 
+    argparser.add_argument('-d', '--debug', help="Run in debug mode.  Display all messages to STDOUT", action='store_true', default=False)
     argparser.add_argument('-p', '--port', help="Port to listen on.", default=lp.port)
     argparser.add_argument('-a', '--address', help="Address to listen on.", default=lp.address)
-    argparser.add_argument('-u', '--url', help="URL for the WebSocket", default='/ws')
+    argparser.add_argument('-u', '--url', help="URL for the WebSocket.  This should only be the path part of the URL (e.g.: /ws)", default='/ws')
 
     args = argparser.parse_args()
 
     url = args.url
     del args.url
-    return url, args
+    debug = args.debug
+    del args.debug
 
-
-
-
-# Called during testing.
-def debug():
-    url, args = parse_args()
-    api = ApplicationServer(url, args, handler_class=WAMPMetaHandlerDebug)
-    api.run()
+    return url, args, debug
 
 # Called during regular execution.
 def main():
-    url, args = parse_args()
+    url, args, debug = parse_args()
 
-    api = ApplicationServer(url, args)
-    api.run()
+    if debug:
+        server = ApplicationServer(url, args, handler_class=WAMPMetaHandlerDebug)
+    else:
+        server = ApplicationServer(url, args)
+    server.run()
 
 if __name__ == "__main__":
     main()

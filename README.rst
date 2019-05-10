@@ -3,26 +3,22 @@ WAMPnado
 ========
 
 This Python module implements parts of `WAMP <https://wamp-proto.org/>`_
-(Web Application Messaging Protocol).
+(Web Application Messaging Protocol).  It is both a free-standing WAMP
+router and also a library for embedding a WAMP router within projects
+using the Tornado `Tornado <http://www.tornadoweb.org/>`_ asynchronous networking library and web framework.
+
+The main wampnado module, especially the ApplicationServer class provides
+a reference implementation.
 
 WAMPnado provides means of having an API which interacts with WAMP-clients
 (e.g. `Autobahn <http://autobahn.ws/>`_).
-
-WAMPnado is a library for writing WAMP routers (both dealers and brokers)
-based on the Tornado `Tornado <http://www.tornadoweb.org/>`_ (Web framework).
-
-WAMP was originally designed to use WebSockets as a transport.  While the WAMP
-standard provies for other transports, this implementation is currently limited
-to WebSockets.  This may change in the future, however, it is likely that additional
-transports may not really fit within the Tornado framework.  However, all transports
-will probably require an interface like the Tornado handler interface.
 
 WAMP originally used `JSON <https://www.json.org/>`_ for serialization.
 While this is easy, it makes for inefficient use of space with binary data.
 Therefore, WAMP introducted an ability to negotiate other serialization formats,
 most prominently `MessagePack <https://msgpack.org/index.html>`_.  This library
-defaults to MessagePack, but this default can be changed in implementing libraries,
-and it can also be overriden on instantiation.
+defaults to MessagePack when clients announce their support, but this default
+can be changed in implementing libraries, and it can also be overriden on instantiation.
 
 While the goal of this project is to implement a fairly complete set of WAMP router
 functionality, there's a lot that doesn't exist yet, and there's a lot of boilerplate,
@@ -46,6 +42,7 @@ How to install
 Using `pip <https://pip.pypa.io/>`_ (to be available soon):
 
 This doesn't work yet.  Stay tuned.
+
 .. code :: bash
 
     pip install wampnado
