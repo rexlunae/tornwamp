@@ -2,16 +2,39 @@
 Classes and methods for Topic URIs for pub/sub
 """
 
+from inspect import isfunction
+
 import tornadis
 from tornado import ioloop
 
 from wampnado.uri import URI, URIType, deliver_event_messages
 from wampnado.features import Options, server_features
-from wampnado.identifier import create_global_id
+from wampnado.identifier import create_global_id, SERVER_SESSION_ID
 from wampnado.messages import PublishedMessage, EventMessage
 
 PUBSUB_TIMEOUT = 60
 PUBLISHER_CONNECTION_TIMEOUT = 3 * 3600 * 1000  # 3 hours in miliseconds
+
+class Subscriber:
+    def __init__(self, handler):
+        self.subscription_id = create_global_id()
+
+        if isfunction(handler):
+            self.pseudo = True
+            self.callback = handler
+        else:
+            self.pseudo = False
+            self.handler = handler
+
+    def write_message(self, msg):
+        self.handler.write_message(msg)
+
+    @property
+    def sessionid(self):
+        if self.pseudo:
+            return SERVER_SESSION_ID
+        else:
+            return self.handler.sessionid
 
 
 class Topic(URI):
@@ -38,10 +61,14 @@ class Topic(URI):
         publication_id = create_global_id()
 
         for subscription_id in self.subscribers.keys():
-            # Per WAMP standard, the publisher does not receive the message.
-            if self.subscribers[subscription_id].sessionid != origin_handler.sessionid:
+            if self.subscribers[subscription_id].pseudo:
+                self.subscribers[subscription_id].callback(*broadcast_msg.args, **broadcast_msg.kwargs)
+            else:
                 event_message = EventMessage(subscription_id=subscription_id, publication_id=publication_id, args=broadcast_msg.args, kwargs=broadcast_msg.kwargs)
-                self.subscribers[subscription_id].write_message(event_message)
+
+                # Per WAMP standard, the publisher does not receive the message.
+                if self.subscribers[subscription_id].sessionid != origin_handler.sessionid:
+                    self.subscribers[subscription_id].write_message(event_message)
 
         if broadcast_msg.options.acknowlege:
             return PublishedMessage(request_id=broadcast_msg.request_id, publication_id=self.registration_id)
@@ -59,10 +86,10 @@ class Topic(URI):
         """
         Add subscriber to a uri.
         """
-        subscription_id = create_global_id()
-        self.subscribers[subscription_id] = handler
+        sub = Subscriber(handler)
+        self.subscribers[sub.subscription_id] = sub
 
-        return subscription_id
+        return sub.subscription_id
 
 
     def disconnect(self, handler):
