@@ -23,7 +23,7 @@ class ApplicationServer:
         ioloop.IOLoop.instance().start()
 
 class ListenerParameters:
-    def __init__(self, port=None, ssl_options=None, address='localhost'):
+    def __init__(self, port=None, ssl_options=None, address='localhost', url='/ws'):
         if port is None:
             if ssl_options is None:
                 port = 80
@@ -33,20 +33,19 @@ class ListenerParameters:
         self.port = port
         self.ssl_options = ssl_options
         self.address = address
+        self.url=url
 
 
-lp = ListenerParameters(
-    port=8080
-)
-
-
-def parse_args():
+def parse_args(*add_args, default_params=ListenerParameters()):
     argparser = ArgumentParser()
 
     argparser.add_argument('-d', '--debug', help="Run in debug mode.  Display all messages to STDOUT", action='store_true', default=False)
-    argparser.add_argument('-p', '--port', help="Port to listen on.", default=lp.port)
-    argparser.add_argument('-a', '--address', help="Address to listen on.", default=lp.address)
-    argparser.add_argument('-u', '--url', help="URL for the WebSocket.  This should only be the path part of the URL (e.g.: /ws)", default='/ws')
+    argparser.add_argument('-p', '--port', help="Port to listen on.", default=default_params.port)
+    argparser.add_argument('-a', '--address', help="Address to listen on.", default=default_params.address)
+    argparser.add_argument('-u', '--url', help="URL for the WebSocket.  This should only be the path part of the URL (e.g.: /ws)", default=default_params.url)
+
+    for arg_list in add_args:
+        argparser.add_argument(*(arg_list['args']), **(arg_list['kwargs']))
 
     args = argparser.parse_args()
 
