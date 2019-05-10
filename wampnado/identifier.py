@@ -36,7 +36,6 @@ MAX_ID = 2 ** 53
 
 existing_ids = []
 
-
 def create_global_id():
     """
     Return a global scope ID, which is not in existing_ids list provided.
@@ -53,3 +52,6 @@ def create_global_id():
             new_id = candidate_id
             existing_ids.append(new_id)
     return new_id
+
+SERVER_SESSION_ID = create_global_id
+
