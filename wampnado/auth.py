@@ -4,6 +4,7 @@ The authentication and authorization functions.
 from copy import deepcopy
 
 from wampnado.features import Options
+from wampnado.identifier import create_global_id
 
 class Roles(Options):
     """
@@ -66,3 +67,31 @@ class Roles(Options):
 
 # This should be copied to each realm when it's created.
 default_roles = Roles()
+
+class AuthIdent:
+    def __init__(self, sessionid=None, authid=None, authrole=None, transport=None, secure=False):
+
+        self.secure = secure
+        self.transport = transport
+
+        if sessionid is None:
+            self.sessionid = create_global_id()
+        else:
+            self.sessionid = sessionid
+        
+        if authid is None:
+            self.authid = 'anonymous'
+        else:
+            self.authid = authid
+        
+        if authrole is None:
+            self.authrole = 'anonymous'
+        else:
+            self.authrole = authrole
+
+    def authenticate(self, method, extra):
+        raise(NotImplementedError)
+
+
+server_auth_ident = AuthIdent(authid='router', authrole='router', secure=True, )
+

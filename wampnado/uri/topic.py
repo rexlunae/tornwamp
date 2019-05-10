@@ -9,7 +9,8 @@ from tornado import ioloop
 
 from wampnado.uri import URI, URIType, deliver_event_messages
 from wampnado.features import Options, server_features
-from wampnado.identifier import create_global_id, SERVER_SESSION_ID
+from wampnado.identifier import create_global_id
+from wampnado.auth import server_auth_ident
 from wampnado.messages import PublishedMessage, EventMessage
 
 PUBSUB_TIMEOUT = 60
@@ -32,7 +33,7 @@ class Subscriber:
     @property
     def sessionid(self):
         if self.pseudo:
-            return SERVER_SESSION_ID
+            return server_auth_ident.sessionid
         else:
             return self.handler.sessionid
 

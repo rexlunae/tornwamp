@@ -53,5 +53,5 @@ def create_global_id():
             existing_ids.append(new_id)
     return new_id
 
-SERVER_SESSION_ID = create_global_id
+
 
