@@ -4,124 +4,160 @@ from wampnado.uri.topic import Topic
 from wampnado.uri.procedure import Procedure
 from wampnado.uri.error import Error
 from wampnado.identifier import create_global_id
+from wampnado.features import Options
+from re import compile
 
+# A lot of these calls need the message passed in so that they can raise exceptions, but there really isn't a message in the case of internal use, so we fake it.
+fake_message = Options(request_id=None, code=None)
 
-class URIManager(dict):
+class URIManager:
     """
-    Manages all existing topics to which connections can potentially
+    Manages all existing uris to which handlers can potentially
     publish, subscribe, or call to.
     """
     def __init__(self):
-        self.redis = None
+        # A table of the registrations issued to URIs under this realm.
+        self.registrations = {}
 
-    def create_topic(self, name):
+        # A table of the URIs.
+        self.uris = {}
+
+        self.uri_pattern = compile(r"^([0-9a-z_]+\.)*([0-9a-z_]+)$")
+
+        # Reserve all the standard errors.
+        self.errors = Options(
+            # The first two of these aren't technically errors, but just messages used in closing a connection.  But close enough.
+            close_realm=self.create_error('wamp.close.close_realm')[0],
+            goodbye_and_out=self.create_error('wamp.close.goodbye_and_out')[0],
+
+            # These are the errors that are required and standardized by WAMP Protocol standard
+            invalid_uri=self.create_error('wamp.error.invalid_uri')[0],
+            no_such_procedure=self.create_error('wamp.error.no_such_procedure')[0],
+            procedure_already_exists=self.create_error('wamp.error.procedure_already_exists')[0],
+            no_such_registration=self.create_error('wamp.error.no_such_registration')[0],
+            no_such_subscription=self.create_error('wamp.error.no_such_subscription')[0],
+            invalid_argument=self.create_error('wamp.error.invalid_argument')[0],
+            system_shutdown=self.create_error('wamp.close.system_shutdown')[0],
+            protocol_violation=self.create_error('wamp.error.protocol_violation')[0],
+            not_authorized=self.create_error('wamp.error.not_authorized')[0],
+            authorization_failed=self.create_error('wamp.error.authorization_failed')[0],
+            no_such_realm=self.create_error('wamp.error.no_such_realm')[0],
+            no_such_role=self.create_error('wamp.error.no_such_role')[0],
+            cancelled=self.create_error('wamp.error.canceled')[0],
+            option_not_allowed=self.create_error('wamp.error.option_not_allowed')[0],
+            no_eligible_callee=self.create_error('wamp.error.no_eligible_callee')[0],
+            option_disallowed__disclose_me=self.create_error('wamp.error.option_disallowed.disclose_me')[0],
+            network_failure=self.create_error('wamp.error.network_failure')[0],
+
+            # These aren't part of the WAMP standard, but I use them, so here they are.
+            not_pending=self.create_error('wamp.error.not_pending')[0],    # Sent if we get a YIELD message but there is no call pending.
+            unsupported=self.create_error('wamp.error.unsupported')[0],    # Sent when we get a message that we don't recognize.
+            general_error=self.create_error('wamp.error.general_error')[0],    # Sent when we get a message that we don't recognize.
+        )
+
+
+    def get(self, uri_name, msg=fake_message):
         """
-        Creates a topic that can be subscribed and published to.
+        Looks up and returns the specified uri object by name.  If it is not found, it will raise the appropriate exception, unless noraise is true.
         """
-        self[name] = self.get(name, Topic(name, redis=self.redis))
+        if not self.uri_pattern.match(uri_name):
+            raise self.errors.invalid_uri.to_exception(request_id=msg.request_id, request_code=msg.code, details=Options(uri=uri_name))
+
+        return  self.uris.get(uri_name)
+
+    def create(self, name, uri_obj, returnifexists=True, msg=fake_message):
+        """
+        Adds a new uri agnostic of type.  Usually, this should be called by other methods inside this object.
+        """
+        uri = self.get(name, msg=msg)
+
+        # Only add if it doesn't exist.
+        if uri is None:
+            self.uris[name] = uri_obj
+            registration_id = self.uris[name].registration_id
+            self.registrations[registration_id] = name
+            return self.uris[name], registration_id
+        elif returnifexists:
+            return uri, uri.registration_id
+        else:
+            return None
+
+
+    def create_topic(self, name, msg=fake_message):
+        """
+        Creates a uri that can be subscribed and published to.
+        """
+        args = self.create(name, Topic(name))
+
+        if args[0].uri_type != URIType.TOPIC:
+            raise self.errors.no_such_subscription.to_exception(msg.code, msg.request_id)
+
+        return args
+
 
     def create_error(self, name):
         """
         Adds an entry for an error URI.
         """
-        new_uri = Error(name)
-        uri = self.get(name, new_uri)
-        self[name] = uri
-        return self[name]
+        args = self.create(name, Error(name))
+
+        return args
+
+    def create_procedure(self, name, provider_handler, msg=fake_message):
+        """
+        Add a new procedure provided by the provider_handler.  request_msg should generally be specified whenever the user.
+        """
+        args = self.create(name, Procedure(name, provider_handler), returnifexists=False)
+        if args is None:
+            raise self.errors.procedure_already_exists.to_exception(msg.code, msg.request_id)
+
+        return args
 
 
-    def create_rpc(self, name, connection, invoke=None):
+    def remove(self, registration_id):
         """
-        Add a new RPC target on this connection.
+        Removes a given registration, regardless of type.
         """
-        new_uri = Procedure(name, provider=connection)
-        uri = self.get(name, new_uri)
-        registration_id = new_uri.registration_id
-        processors.rpc.customize.procedures[name] = [invoke, [], {}]
-        self[name] = uri
-        return registration_id
+        name = self.registrations.pop(registration_id, False)
+        if name:
+            for registration_id, registration_uri in self.registrations:
+                if name == registration_uri:
+                    self.registrations.pop(name)
+            return self.uris.pop(name)
 
-    def remove_rpc(self, name, registration_id):
-        uri = self.get(name)
-        if uri is not None:
-            pass
-            # XXX - Figure this out.
 
-    def add_subscriber(self, uri, connection, registration_id=None):
+    def add_subscriber(self, uri_name, handler, msg=fake_message):
         """
-        Add a connection as a topic's subscriber.
+        Add a handler as a uri's subscriber.  
         """
-        new_topic = Topic(uri, self.redis)
-        topic = self.get(uri, new_topic)
-        registration_id = registration_id or create_global_id()
-        topic.add_subscriber(registration_id, connection)
-        self[uri] = topic
-        connection.add_subscription_channel(registration_id, uri)
-        return registration_id
-
-    def remove_subscriber(self, uri, registration_id):
-        """
-        Remove a connection a topic's subscriber provided:
-        - uri
-        - subscription_id
-        """
-        topic = self.get(uri)
-        if topic is not None and topic.uri_type == URIType.TOPIC:
-            connection = topic.remove_subscriber(registration_id)
-            connection.remove_subscription_channel(uri)
-        else:
-            from warnings import warn
-            warn('uri ' + topic.uri_type + ' is of type ' + topic.uri_type)
-
-    def add_publisher(self, uri, connection, subscription_id=None):
-        """
-        Add a connection as a topic's publisher.
-        """
-        topic = self.get(uri, Topic(uri, self.redis))
-        subscription_id = subscription_id or create_global_id()
-        topic.publishers[subscription_id] = connection
-        self[uri] = topic
-        connection.add_publishing_channel(subscription_id, uri)
+        (uri, _) = self.create_topic(uri_name, msg=msg)
+        subscription_id = self.uris[uri.name].add_subscriber(handler)
         return subscription_id
 
-    def remove_publisher(self, uri, subscription_id):
+    def remove_subscriber(self, uri, handler):
         """
-        Remove a connection a topic's subscriber
+        Remove a connection a uri's subscriber provided:
+        - uri
+        - handler
         """
-        topic = self.get(uri)
-        if topic and subscription_id in topic.publishers:
-            connection = topic.publishers.pop(subscription_id)
-            connection.remove_publishing_channel(uri)
+        uri = self.uris.get(uri)
+        uri.remove_subscriber(handler)
 
-    def remove_connection(self, connection):
-        """
-        Connection is to be removed, scrap all connection publishers/subscribers in every topic
-        """
-        for name, registration_id in connection.uris.get("publisher", {}).items():
-            uri = self.get(name)
-            uri.publishers.pop(registration_id, None)
+        # If there are no publishers and no subscribers, delete it.
+        if len(uri.subscriptions.keys) == 0 and len(uri.publishers.keys) == 0:
+            self.remove(uri)
 
-        for name, registration_id in connection.uris.get("subscriber", {}).items():
-            uri = self.get(name)
-            uri.remove_subscriber(registration_id)
+    def disconnect(self, handler, notify=False):
+        """
+        Removes a handler from the manager, effectively disconnecting it from the realm.  Can be called upon the closure of the
+        transport as part of its cleanup, or by an authorized client to kick the other client.
+        """
+        for name in list(self.uris.keys()):
+            self.uris[name].disconnect(handler)
+            if not self.uris[name].live:
+                del self.uris[name]
+        if notify:
+            pass    # XXX Send the final message.
 
-        for name, registration_id in connection.uris.get("rpcs", {}).items():
-            uri = self.pop(name, None)
-
-    def get_connection(self, name, registration_id):
-        """
-        Get topic connection provided uri and subscription_id. Try to find
-        it in subscribers, otherwise, fetches from publishers.
-        Return None if it is not available in any.
-        """
-        uri = self[name]
-        return uri.subscribers.get(registration_id) or uri.publishers.get(registration_id)
-
-    @property
-    def dict(self):
-        """
-        Return a dict that is serializable.
-        """
-        return {k: topic.dict for k, topic in self.items()}
 
 

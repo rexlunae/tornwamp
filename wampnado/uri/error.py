@@ -2,9 +2,27 @@
 A module to regularize the errors that WAMP can issue.
 """
 
-from enum import Enum
-
 from wampnado.uri import URI, URIType
+from wampnado.messages import ErrorMessage
+
+class WAMPException(Exception):
+    def __init__(self, error_uri, request_code, request_id, *args, **kwargs):
+        self.error_uri = error_uri
+        self.request_code = request_code
+        self.request_id = request_id
+        self.args = args
+        self.kwargs = kwargs
+        super().__init__()
+
+    def __str__(self):
+        return str(self.message())
+
+    def message(self):
+        """
+        What should be displayed if the exception is not caught and sent as an error message to the client.
+        """
+        return self.error_uri.message(self.request_code, self.request_id, *self.args, **self.kwargs)
+
 
 class Error(URI):
     """
@@ -14,6 +32,8 @@ class Error(URI):
     and held by the broker, to prevent anything else from being registered on them.
 
     https://wamp-proto.org/_static/gen/wamp_latest.html#predefined-uris
+
+    Our errors are also Exceptions, which means that they can be raised directly.
     """
 
     def __init__(self, name):
@@ -22,11 +42,26 @@ class Error(URI):
     # Errors don't have connections, so this is always empty.  Provided to for compatibility with Topics and Procedures.
     connections = {}
 
-    def _disconnect_publisher(self):
+    def disconnect(self, handler):
         """
-        Compatibility-only.
+        Errors don't have handlers, so we don't really need to do anything.  We just need to have something to avoid an error.
         """
-        pass
+    @property
+    def live(self):
+        return True
 
-    def to_uri(self):
-        return self.name
+    def message(self, request_code, request_id, *args, details={}, **kwargs):
+        return ErrorMessage(uri=self.name, request_code=request_code, request_id=request_id, details=details, args=args, kwargs=kwargs)
+
+    def to_exception(self, request_code, request_id, *args, **kwargs):
+        """
+        Returns an exception appropriate for raising.
+        """
+        return WAMPException(self, request_code, request_id, *args, **kwargs)
+    
+
+    def raise_to(self, handler, request_code, request_id, *args, **kwargs):
+        """
+        Raises the error and sends it to the given handler.  This is used when some activity is initiated by one handler, and sent to another.
+        """
+        handler.write_message(self.message(request_code, request_id, *args, **kwargs))

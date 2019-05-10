@@ -26,5 +26,8 @@ setup(name="wampnado",
       packages=find_packages(),
       tests_require=["coverage==4.0.3", "nose==1.3.7", "pep8==1.7.0", "mock==1.0.1", "pylint==1.5.4"],
       url = "https://github.com/rexlunae/wampnado",
+      entry_points={
+        'console_scripts': ['wampnado=wampnado:main', 'wampnado-debug=wampnado:debug'],
+      },
       version="0.0.1"
 )

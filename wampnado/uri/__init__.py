@@ -1,5 +1,5 @@
 """
-Used to handle PubSub topics publishers and subscribers
+Used to handle PubSub uris publishers and subscribers
 """
 from enum import Enum
 import tornadis
@@ -36,12 +36,16 @@ class URI(object):
 
     def _on_event_message(self, uri, raw_msg):
         msg = messages.BroadcastMessage.from_text(raw_msg.decode("utf-8"))
-        #assert_msg = "broadcast message topic and redis pub/sub queue must match ({} != {})".format(uri, msg.uri)
+        #assert_msg = "broadcast message uri and redis pub/sub queue must match ({} != {})".format(uri, msg.uri)
         #assert uri == msg.uri, assert_msg
         if msg.publisher_node_id != messages.PUBLISHER_NODE_ID.hex:
             deliver_event_messages(self, msg.event_message, None)
 
+    def __str__(self):
+        return self.name
 
+    def __repr__(self):
+        return "URI('" + str(self.name) + "', " + str(self.uri_type) + ")"
 
 def deliver_event_messages(uri, event_msg, publisher_connection_id=None):
     """

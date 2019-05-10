@@ -16,7 +16,7 @@ redis pub/sub.
   In order to generate a message from SubscriberProcessor
   get_subscribe_broadcast_message should be overridden. The default behavior is
   not to generate any messages.
-* topic.customize has deliver_event_messages method which should be used to
+* uri.customize has deliver_event_messages method which should be used to
   cutomize which websocket connections should receive the message (this takes
   the role which was performed by direct_messages attribute and the second
   element of the tuple returned by rpc calls)

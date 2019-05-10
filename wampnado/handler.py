@@ -1,16 +1,17 @@
 """
 Implement Tornado WAMP Handler.
 """
+from inspect import isawaitable
 from warnings import warn
 
-from wampnado import session
-from wampnado.realm import WAMPRealm, realms
+from tornado.websocket import WebSocketClosedError
+
+from wampnado.identifier import create_global_id
+from wampnado.realm import get_realm
 from wampnado.transports import WebSocketTransport
 from wampnado.messages import AbortMessage, Code, Message
 from wampnado.processors import UnhandledProcessor, GoodbyeProcessor, HelloProcessor, pubsub, rpc
-
-BINARY_PROTOCOL = 'wamp.2.msgpack'
-JSON_PROTOCOL = 'wamp.2.json'
+from wampnado.serializer import JSON_PROTOCOL, BINARY_PROTOCOL, NONE_PROTOCOL
 
 class WAMPMetaHandler:
     """
@@ -24,20 +25,27 @@ class WAMPMetaHandler:
     WAMPMetaHandler.factory()
     """
     @classmethod
-    def factory(cls, transport_cls=WebSocketTransport):
+    def factory(cls, transport_cls=WebSocketTransport, transport_init_args=[], transport_init_kwargs={}):
         """
         Makes a class to handle the specified transport.
         """
         class A(cls, transport_cls):
-            pass
+            def __init__(self, *args, **kwargs):
+                cls.__init__(self, *args, **kwargs)
+                transport_cls.__init__(self, *args, *transport_init_args, **kwargs, **transport_init_kwargs)
+
         
         return A
 
 
     def __init__(self, *args, preferred_protocol=BINARY_PROTOCOL, **kargs):
         self.preferred_protocol = preferred_protocol
-        self.connection = None
+        self.sessionid = create_global_id()
+        #self.connection = None
         self.realm_id = 'unset'
+        self.authid = None
+        self.authrole = 'anonymous'
+        self.authmethod = 'anonymous'
         super().__init__(*args, **kargs)
 
     processors = {
@@ -55,22 +63,22 @@ class WAMPMetaHandler:
         """
         Overrides the base class to clean up our connections and registrations.
         """
-        self.realm.uri_registry.remove_connection(self.connection)
+        self.realm.disconnect(self)
         self.realm.deregister_handler(self.realm_id)
+        
+        # This is a meta-class, so we're assuming that we have a parent class, even if it isn't listed.
         super().on_close()
 
-    def attach_realm(self, name):
+    def attach_realm(self, name, hello_message=None):
         """
         Attached the connection to a given realm.  Each connection can be attached to one and only one realm.
         This function can be overridden to add access controls to it.
         """
-        if not name in realms:
-            realms[name] = WAMPRealm(name)
+        self.realm = get_realm(name)
+        self.realm_id = self.realm.register_handler(self)
 
-        self.realm_id = realms[name].register_handler(self)
-
-        # Doubly-linked
-        self.realm = realms[name]
+        # Track the handshake information.
+        self.hello_message=hello_message
 
     def abort(self, handler, error_msg, details, reason=None):
         """
@@ -82,13 +90,6 @@ class WAMPMetaHandler:
         abort_message.error(error_msg, details)
         handler.write_message(abort_message.json)
         handler.close(1, error_msg)
-
-
-    supported_protocols = {
-        JSON_PROTOCOL: True,
-        BINARY_PROTOCOL: True,
-    }
-
 
     def select_subprotocol(self, subprotocols):
         """
@@ -113,6 +114,8 @@ class WAMPMetaHandler:
             return super().write_message(msg.json)
         elif self.protocol == BINARY_PROTOCOL:
             return super().write_message(msg.msgpack, binary=True)
+        elif self.protocol == NONE_PROTOCOL:
+            return super().write_message(msg)
         else:
             warn('unknown protocol ' + self.protocol)
 
@@ -124,47 +127,12 @@ class WAMPMetaHandler:
             return Message.from_text(txt)
         elif self.protocol == BINARY_PROTOCOL:
             return Message.from_bin(txt)
+        elif self.protocol == NONE_PROTOCOL:
+            # If we're using NONE_PROTOCOL, txt is actually just the message.
+            return txt
+            #return Message(txt.value)
         else:
             warn('unknown protocol ' + self.protocol)
-
-    def authorize(self):
-        """
-        Override for authorizing connection before the WebSocket is opened.
-        Sample usage: analyze the request cookies.
-
-        Return a tuple containing:
-        - boolean (if connection was accepted or not)
-        - dict (containing details of the authentication)
-        - string (explaining why the connection was not accepted)
-        """
-        return True, {}, ""
-
-    def register_connection(self, connection):
-        """
-        Add connection to connection's manager.
-        """
-        session.connections[connection.id] = connection
-
-    def deregister_connection(self):
-        """
-        Remove connection from connection's manager.
-        """
-        if self.connection:
-            self.realm.uri_registry.remove_connection(self.connection)
-        return session.connections.pop(self.connection.id, None) if self.connection else None
-
-    def open(self):
-        """
-        Responsible for authorizing or aborting WebSocket connection.
-        It calls 'authorize' method and, based on its response, sends
-        a ABORT message to the client.
-        """
-        authorized, details, error_msg = self.authorize()
-        if authorized:
-            self.connection = session.ClientConnection(self, **details)
-            self.register_connection(self.connection)
-        else:
-            self.abort(self, error_msg, details)
 
     async def on_message(self, txt):
         """
@@ -173,34 +141,35 @@ class WAMPMetaHandler:
         changing the value of 'processors' dict, available at
         wampnado.customize module.
         """
-        msg = self.read_message(txt)
-        Processor = self.processors.get(msg.code, UnhandledProcessor)
-        processor = Processor(msg, self)
+        try:
+            msg = self.read_message(txt)
+            Processor = self.processors.get(msg.code, UnhandledProcessor)
+            processor = Processor(msg, self)
 
-        if self.connection and not self.connection.zombie:  # TODO: cover branch else
-            if processor.answer_message is not None:
-                self.write_message(processor.answer_message)
+            #if self.connection and not self.connection.zombie:  # TODO: cover branch else
+            answer = processor.answer_message
+            if isawaitable(answer):
+                answer = await answer
+            if answer is not None:
+                self.write_message(answer)
 
-        self.broadcast_messages(processor)
+            self.broadcast_messages(processor)
 
-        if processor.must_close:
-            self.close(processor.close_code, processor.close_reason)
+            if processor.must_close:
+                self.on_close(processor.close_code, processor.close_reason)
+        except WebSocketClosedError as e:
+            warn('closed connection {} due to {}'.format(self.sessionid, e))
+            self.on_close()
 
     def broadcast_messages(self, processor):
+        """
+        """
         for msg in processor.broadcast_messages:
-            topic = self.realm.uri_registry.get(msg.topic_name)
+            uri = self.realm.get(msg.uri_name)
 
             # Only publish if there is someone listening.
-            if topic is not None:
-                topic.publish(msg)
-
-
-    def close(self, code=None, reason=None):
-        """
-        Invoked when a WebSocket is closed.
-        """
-        self.deregister_connection()
-        super().close(code, reason)
+            if uri is not None:
+                uri.publish(self, msg)
 
 
 

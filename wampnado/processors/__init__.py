@@ -9,6 +9,7 @@ import six
 from tornado import gen
 
 from wampnado.messages import Message, ErrorMessage, GoodbyeMessage, HelloMessage, WelcomeMessage
+from wampnado.uri.error import WAMPException
 
 class Processor(six.with_metaclass(abc.ABCMeta)):
     """
@@ -24,8 +25,7 @@ class Processor(six.with_metaclass(abc.ABCMeta)):
         message: json
         handler: handler object
         """
-        self.session_id = getattr(handler.connection, "id", None)
-        self.connection = handler.connection
+        # XXX self.session_id = getattr(handler.connection, "id", None)
         self.handler = handler
 
         # message just received by the WebSocket
@@ -34,7 +34,7 @@ class Processor(six.with_metaclass(abc.ABCMeta)):
         # messages to be sent by the WebSocket
         self.answer_message = None  # response message
 
-        # messages broadcasted to all subscribers, possibly via redis pub/sub
+        # messages broadcasted to all subscribers
         self.broadcast_messages = []
 
         # the attributes below are in case we are expected to close the socket
@@ -42,7 +42,11 @@ class Processor(six.with_metaclass(abc.ABCMeta)):
         self.close_code = None
         self.close_reason = None
 
-        self.process()
+        try:
+            self.answer_message = self.process()
+        except WAMPException as e:
+            self.answer_message = e.message()
+
 
     @abc.abstractmethod
     def process(self):
@@ -56,6 +60,7 @@ class Processor(six.with_metaclass(abc.ABCMeta)):
         - close_code (1000 or in the range 3000 to 4999)
         - close_message
         """
+        raise(NotImplementedError)
 
 
 class UnhandledProcessor(Processor):
@@ -71,7 +76,7 @@ class UnhandledProcessor(Processor):
             uri=self.handler.realm.errors.unsupported.to_uri()
         )
         out_message.error(description)
-        self.answer_message = out_message
+        return out_message
 
 
 class HelloProcessor(Processor):
@@ -84,8 +89,8 @@ class HelloProcessor(Processor):
         """
         hello_message = HelloMessage(*self.message.value)
         welcome_message = WelcomeMessage()
-        self.handler.attach_realm(hello_message.realm)
-        self.answer_message = welcome_message
+        self.handler.attach_realm(hello_message.realm, hello_message=hello_message)
+        return welcome_message
 
 
 class GoodbyeProcessor(Processor):
@@ -93,7 +98,6 @@ class GoodbyeProcessor(Processor):
     Responsible for dealing GOODBYE messages.
     """
     def process(self):
-        self.answer_message = GoodbyeMessage(*self.message.value)
         self.must_close = True
         # Excerpt from RFC6455 (The WebSocket Protocol)
         # "Endpoints MAY: use the following pre-defined status codes when sending
@@ -103,3 +107,4 @@ class GoodbyeProcessor(Processor):
         # http://tools.ietf.org/html/rfc6455#section-7.4
         self.close_code = 1000
         self.close_reason = self.answer_message.details.get('message', '')
+        return GoodbyeMessage(*self.message.value)

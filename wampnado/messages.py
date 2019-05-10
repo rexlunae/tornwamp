@@ -13,6 +13,7 @@ from enum import IntEnum
 from io import BytesIO
 
 from wampnado.identifier import create_global_id
+from wampnado.features import server_features, Options
 
 PUBLISHER_NODE_ID = uuid.uuid4()
 
@@ -45,7 +46,7 @@ class Code(IntEnum):
     # UNREGISTER = 66
     # UNREGISTERED = 67
     INVOCATION = 68
-    # INTERRUPT = 69
+    INTERRUPT = 69
     YIELD = 70
 
 
@@ -53,11 +54,11 @@ class BroadcastMessage(object):
     """
     This is a message that a procedure may want delivered.
 
-    This class is composed of an EventMessage and a topic name
+    This class is composed of an EventMessage and a uri name
     """
-    def __init__(self, topic_name, event_message, publisher_connection_id):
+    def __init__(self, uri_name, event_message, publisher_connection_id):
         assert isinstance(event_message, EventMessage), "only event messages are supported"
-        self.topic_name = topic_name
+        self.uri_name = uri_name
         self.event_message = event_message
         self.publisher_connection_id = publisher_connection_id
         self.publisher_node_id = PUBLISHER_NODE_ID.hex
@@ -67,7 +68,7 @@ class BroadcastMessage(object):
         info_struct = {
             "publisher_node_id": self.publisher_node_id,
             "publisher_connection_id": self.publisher_connection_id,
-            "topic_name": self.topic_name,
+            "uri_name": self.uri_name,
             "event_message": self.event_message.json,
         }
         return json.dumps(info_struct)
@@ -77,7 +78,7 @@ class BroadcastMessage(object):
         info_struct = {
             "publisher_node_id": self.publisher_node_id,
             "publisher_connection_id": self.publisher_connection_id,
-            "topic_name": self.topic_name,
+            "uri_name": self.uri_name,
             "event_message": self.event_message.msgpack,
         }
         return msgpack.packb(info_struct, use_bin_type=True)
@@ -90,7 +91,7 @@ class BroadcastMessage(object):
         raw = json.loads(text)
         event_msg = EventMessage.from_text(raw["event_message"])
         msg = cls(
-            topic_name=raw["topic_name"],
+            uri_name=raw["uri_name"],
             event_message=event_msg,
             publisher_connection_id=raw["publisher_connection_id"]
         )
@@ -105,7 +106,7 @@ class BroadcastMessage(object):
         raw = msgpack.unpackb(bin, raw=False)
         event_msg = EventMessage.from_text(raw["event_message"])
         msg = cls(
-            topic_name=raw["topic_name"],
+            uri_name=raw["uri_name"],
             event_message=event_msg,
             publisher_connection_id=raw["publisher_connection_id"]
         )
@@ -230,28 +231,6 @@ class AbortMessage(Message):
         self.value = [self.code, self.details, self.reason]
 
 
-DEFAULT_WELCOME_DETAILS = {
-    "authrole": "anonymous",
-    "authmethod": "anonymous",
-    "roles": {
-        "broker": {
-            "features": {
-                "publisher_identification": True,
-                "publisher_exclusion": True,
-                "subscriber_blackwhite_listing": True
-            }
-        },
-        "dealer": {
-            "features": {
-                "progressive_call_results": True,
-                "caller_identification": True
-            }
-        }
-    },
-    "authid": "jiQHbkkOxD1EFI7mJ1JITy3K"
-}
-
-
 class WelcomeMessage(Message):
     """
     Sent from the server side to open a WAMP session.
@@ -265,7 +244,7 @@ class WelcomeMessage(Message):
     def __init__(self, code=Code.WELCOME, session_id=None, details=None):
         self.code = code
         self.session_id = session_id or create_global_id()
-        self.details = details or DEFAULT_WELCOME_DETAILS
+        self.details = details or server_features
         self.value = [self.code, self.session_id, self.details]
 
 
@@ -315,15 +294,15 @@ class CallMessage(Message):
     [CALL, Request|id, Options|dict, Procedure|uri, Arguments|list, ArgumentsKw|dict]
     """
 
-    def __init__(self, code=Code.CALL, request_id=None, options=None, procedure=None, args=None, kwargs=None):
+    def __init__(self, code=Code.CALL, request_id=None, options={}, procedure=None, args=[], kwargs={}):
         assert request_id is not None, "CallMessage must have request_id"
         assert procedure is not None, "CallMessage must have procedure"
         self.code = code
         self.request_id = request_id
-        self.options = options or {}
         self.procedure = procedure
-        self.args = args or []
-        self.kwargs = kwargs or {}
+        self.options = Options(**options)
+        self.args = args
+        self.kwargs = kwargs
         self.value = [
             self.code,
             self.request_id,
@@ -331,6 +310,23 @@ class CallMessage(Message):
             self.procedure,
         ]
         self._update_args_and_kargs()
+
+class InterruptMessage(Message):
+    """
+    Stop a progressive result before it's finished.
+
+    [INTERRUPT, INVOCATION.Request|id, Options|dict]
+    """
+    def __init__(self, code=Code.INTERRUPT, request_id=None, options={}):
+        assert request_id is not None, "InterruptMessage must have request_id"
+        self.options = Options(**options)
+        self.value = [
+            self.code,
+            self.request_id,
+            self.options,
+        ]
+
+    
 
 class InvocationMessage(Message):
     """
@@ -341,12 +337,11 @@ class InvocationMessage(Message):
     [INVOCATION, Request|id, REGISTERED.Registration|id, Details|dict, CALL.Arguments|list, CALL.ArgumentsKw|dict]
     """
 
-    def __init__(self, code=Code.INVOCATION, request_id=None, registration_id=None, details=None, args=None, kwargs=None):
+    def __init__(self, code=Code.INVOCATION, request_id=None, registration_id=None, details={}, args=None, kwargs=None):
         if request_id is None:
             request_id = create_global_id()
         assert request_id is not None, "InvocationMessage must have request_id"
         assert registration_id is not None, "InvocationMessage must have registration_id"
-        assert details is not None, "InvocationMessage must have details"
         self.code = code
         self.request_id = request_id
         self.registration_id = registration_id or {}
@@ -368,13 +363,13 @@ class YieldMessage(Message):
 
     [YIELD, INVOCATION.Request|id, Options|dict]
     [YIELD, INVOCATION.Request|id, Options|dict, Arguments|list]
-    [YIELD, INVOCATION.Request|id, Options|dict, Arguments|list,ArgumentsKw|dict]
+    [YIELD, INVOCATION.Request|id, Options|dict, Arguments|list, ArgumentsKw|dict]
     """
 
     def __init__(self, code=Code.YIELD, request_id=None, options=None, args=None, kwargs=None):
         assert request_id is not None, "YieldMessage must have request_id"
         self.code = code
-        self.options = options
+        self.options = Options(**options)
         self.request_id = request_id
         self.args = args
         self.kwargs = kwargs
@@ -421,19 +416,19 @@ class ErrorMessage(Message):
 
 class SubscribeMessage(Message):
     """
-    A Subscriber communicates its interest in a topic to the Server by sending
+    A Subscriber communicates its interest in a uri to the Server by sending
     a SUBSCRIBE message:
-    [SUBSCRIBE, Request|id, Options|dict, Topic|uri]
+    [SUBSCRIBE, Request|id, Options|dict, uri|uri]
     """
 
-    def __init__(self, code=Code.SUBSCRIBE, request_id=None, options=None, topic=None):
+    def __init__(self, code=Code.SUBSCRIBE, request_id=None, options=None, uri=None):
         assert request_id is not None, "SubscribeMessage must have request_id"
-        assert topic is not None, "SubscribeMessage must have topic"
+        assert uri is not None, "SubscribeMessage must have uri"
         self.code = code
         self.request_id = request_id
-        self.options = options or {}
-        self.topic = topic
-        self.value = [self.code, self.request_id, self.options, self.topic]
+        self.options = Options(**options)
+        self.uri = uri
+        self.value = [self.code, self.request_id, self.options, self.uri]
 
 
 class SubscribedMessage(Message):
@@ -454,19 +449,19 @@ class SubscribedMessage(Message):
 
 class RPCRegisterMessage(Message):
     """
-    A Registerer communicates its interest in a topic to the Server by sending
+    A Registerer communicates its interest in a uri to the Server by sending
     a REGISTER message:
-    [REGISTER, Request|id, Options|dict, Topic|uri]
+    [REGISTER, Request|id, Options|dict, uri|uri]
     """
 
-    def __init__(self, code=Code.REGISTER, request_id=None, options=None, topic=None):
+    def __init__(self, code=Code.REGISTER, request_id=None, options=None, uri=None):
         assert request_id is not None, "RegisterMessage must have request_id"
-        assert topic is not None, "RegisterMessage must have topic"
+        assert uri is not None, "RegisterMessage must have uri"
         self.code = code
         self.request_id = request_id
-        self.options = options or {}
-        self.topic = topic
-        self.value = [self.code, self.request_id, self.options, self.topic]
+        self.options = Options(**options)
+        self.uri = uri
+        self.value = [self.code, self.request_id, self.options, self.uri]
 
 
 class RPCRegisteredMessage(Message):
@@ -483,7 +478,7 @@ class RPCRegisteredMessage(Message):
         self.code = code
         self.request_id = request_id
         self.registration_id = registration_id
-        #self.topic = topic
+        #self.uri = uri
         self.value = [self.code, self.request_id, self.registration_id]
 
 
@@ -492,20 +487,20 @@ class PublishMessage(Message):
     """
     Sent by a Publisher to a Broker to publish an event.
 
-    [PUBLISH, Request|id, Options|dict, Topic|uri]
-    [PUBLISH, Request|id, Options|dict, Topic|uri, Arguments|list]
-    [PUBLISH, Request|id, Options|dict, Topic|uri, Arguments|list, ArgumentsKw|dict]
+    [PUBLISH, Request|id, Options|dict, uri|uri]
+    [PUBLISH, Request|id, Options|dict, uri|uri, Arguments|list]
+    [PUBLISH, Request|id, Options|dict, uri|uri, Arguments|list, ArgumentsKw|dict]
     """
-    def __init__(self, code=Code.PUBLISH, request_id=None, options=None, topic=None, args=None, kwargs=None):
+    def __init__(self, code=Code.PUBLISH, request_id=None, options={}, uri_name=None, args=None, kwargs=None):
         assert request_id is not None, "PublishMessage must have request_id"
-        assert topic is not None, "PublishMessage must have topic"
+        assert uri_name is not None, "PublishMessage must have uri"
         self.code = code
         self.request_id = request_id
-        self.options = options or {}
-        self.topic = topic
+        self.options = Options(**options)
+        self.uri_name = uri_name
         self.args = args or []
         self.kwargs = kwargs or {}
-        self.value = [self.code, self.request_id, self.options, self.topic]
+        self.value = [self.code, self.request_id, self.options, self.uri_name]
         self._update_args_and_kargs()
 
 
@@ -607,6 +602,7 @@ CODE_TO_CLASS = {
     # UNREGISTER = 66
     # UNREGISTERED = 67
     Code.INVOCATION: InvocationMessage,         # 68
+    Code.INTERRUPT: InterruptMessage,
     # INTERRUPT = 69
     Code.YIELD: YieldMessage,                   # 70
 }

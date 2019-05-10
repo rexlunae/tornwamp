@@ -11,7 +11,7 @@ class Options(dict):
         super().__init__(**kwargs)
 
     def __getattr__(self, name):
-        return self[name]
+        return self.get(name)
 
     def __setattr__(self, name, value):
         self[name] = value
@@ -89,8 +89,8 @@ server_features = Options(
         ),
         dealer=Options(
             features=Options(
-                progressive_call_results=True,
-                caller_identification=True
+                #progressive_call_results=True,
+                #caller_identification=True
             )
         )
     ),

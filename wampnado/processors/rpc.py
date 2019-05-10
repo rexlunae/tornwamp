@@ -12,8 +12,14 @@ from tornado import gen
 
 from wampnado.messages import CallMessage, RPCRegisterMessage, RPCRegisteredMessage, ResultMessage, ErrorMessage, EventMessage, YieldMessage
 from wampnado.processors import Processor
-from wampnado.processors.rpc import customize
 from wampnado.messages import Code
+from wampnado.uri.procedure import Procedure
+from wampnado.auth import default_roles
+
+default_roles.register('call')
+default_roles.register('register')
+default_roles.register('yield')
+
 
 class YieldProcessor(Processor):
     """
@@ -21,21 +27,17 @@ class YieldProcessor(Processor):
     """
     def process(self):
         """
-        Sends the final value of the RPC to the original caller.
+        Sends the final value of the RPC to the original caller.  One of two things may issue:
+        1.  An ERROR message back to the yield'ing client.  If this happens, an exception will be raised, and there is therefore no return.
+        2.  A RESULT message to the original calling client.  Since this does not return anything to the yield'ing client, we return None.
         """
         yield_message = YieldMessage(*self.message.value)
-        (destination_connection, date) = customize.request_ids.pop(yield_message.request_id, None)
 
-        if destination_connection is None:
-            return ErrorMessage(request_code=Code.YIELD, request_id=yield_message.request_id, uri=self.handler.realm.errors.not_pending.to_uri())
-        elif destination_connection.zombie:
-            warn('Lost connection before response' + str(yield_message.value))
-        else:
-            result_message = ResultMessage(request_id=yield_message.request_id, details=yield_message.details, args=yield_message.args, kwargs=yield_message.kwargs)
-            destination_connection.write_message(result_message)
+        self.handler.realm.roles.authorize('yield', self.handler, yield_message.code, yield_message.request_id)
 
-            # There is no return message from a yield.
-            return None
+        Procedure.yield_result(self.handler, yield_message)
+
+        return None
     
 
 class RegisterProcessor(Processor):
@@ -48,23 +50,15 @@ class RegisterProcessor(Processor):
         """
 
         # We reprocess the message into a full RPCRegisterMessage to get all the methods and properties.
-        full_message = RPCRegisterMessage(*self.message.value)
-        (allow, msg, error_uri) = customize.authorize_registration(full_message.topic, self.handler)
-        # By default we send an error back.
-        answer = ErrorMessage(
-            request_id=full_message.request_id,
-            request_code=full_message.code,
-            uri=error_uri,
-        )
-        answer.error(msg)
+        received_message = RPCRegisterMessage(*self.message.value)
 
-        if allow:
-            registration_id = self.handler.realm.uri_registry.create_rpc(full_message.topic, self.connection, invoke=customize.invoke)
-            answer = RPCRegisteredMessage(
-                request_id=full_message.request_id,
-                registration_id=registration_id,
-            )
-        self.answer_message = answer
+        self.handler.realm.roles.authorize('register', self.handler, received_message.code, received_message.request_id)
+
+        (_, registration_id) = self.handler.realm.create_procedure(received_message.uri, self.handler, received_message)
+        return RPCRegisteredMessage(
+            request_id=received_message.request_id,
+            registration_id=registration_id,
+        )
 
 
 class CallProcessor(Processor):
@@ -73,26 +67,19 @@ class CallProcessor(Processor):
     """
     def process(self):
         """
-        Call an RPC, either defined in wampnado.customize.procedures (dict), or a remote call to another client.
-
-        Each method should return:
-        - RESULT
-        - ERROR
-
-        However, if the dealer cannot handle the call locally, the RESULT will be issued separately, and no message will issue from this routine.  This is the normal case.
-
-        Which will be the processor's answer message.'
+        Invokes a procedure.  It can be either a true RPC, fulfilled by a remote client via the
+        CALL->INVOCATION->YIELD->RESULT pathway or by either a pseudo-rpc fulfulled. Both pseudo-
+        rpcs and errors can be fulfilled by returning the result, but a true RPC just registers
+        the invocation as pending and returns nothing.
         """
         msg = CallMessage(*self.message.value)
-        if msg.procedure in customize.procedures:
-            [method, args, kwargs] = customize.procedures[msg.procedure]
-            self.answer_message = method(self.handler, msg, self.connection, [*msg.args, *args], { **msg.kwargs, **kwargs })
-        else:
-            response_msg = ErrorMessage(
-                request_code=msg.code,
-                request_id=msg.request_id,
-                details={"call": msg.json},
-                uri=self.handler.realm.errors.no_such_procedure.to_uri()
-            )
-            response_msg.error("The procedure {} doesn't exist".format(msg.procedure))
-            self.answer_message = response_msg
+
+        self.handler.realm.roles.authorize('call', self.handler, msg.code, msg.request_id)
+
+        uri = self.handler.realm.get(msg.procedure)
+
+        if uri is None:
+            raise self.handler.realm.errors.no_such_procedure.to_exception(msg.code, msg.request_id, *msg.args, **msg.kwargs)
+
+        return uri.invoke(self.handler, msg.request_id, *msg.args, **msg.kwargs)
+

@@ -5,7 +5,10 @@ from tornado import gen
 from wampnado.identifier import create_global_id
 from wampnado.messages import ErrorMessage, EventMessage, PublishMessage, PublishedMessage, SubscribeMessage, SubscribedMessage, BroadcastMessage
 from wampnado.processors import Processor
-from wampnado.processors.pubsub import customize
+from wampnado.auth import default_roles
+
+default_roles.register('subscribe')
+default_roles.register('publish')
 
 class SubscribeProcessor(Processor):
     """
@@ -16,25 +19,19 @@ class SubscribeProcessor(Processor):
         Return SUBSCRIBE message based on the input HELLO message.
         """
         received_message = SubscribeMessage(*self.message.value)
-        allow, msg = customize.authorize_subscription(received_message.topic, self.connection)
-        if allow:
-            subscription_id = self.handler.realm.uri_registry.add_subscriber(
-                received_message.topic,
-                self.connection,
-            )
-            answer = SubscribedMessage(
-                request_id=received_message.request_id,
-                subscription_id=subscription_id
-            )
-            self.broadcast_messages = customize.get_subscribe_broadcast_messages(received_message, subscription_id, self.connection.id)
-        else:
-            answer = ErrorMessage(
-                request_id=received_message.request_id,
-                request_code=received_message.code,
-                uri=self.handler.realm.unauthorized.to_uri()
-            )
-            answer.error(msg)
-        self.answer_message = answer
+
+        self.handler.realm.roles.authorize('subscribe', self.handler, received_message.code, received_message.request_id)
+
+        subscription_id = self.handler.realm.add_subscriber(
+            received_message.uri,
+            self.handler,
+            msg=received_message,
+        )
+
+        return SubscribedMessage(
+            request_id=received_message.request_id,
+            subscription_id=subscription_id
+        )
 
 
 class PublishProcessor(Processor):
@@ -46,24 +43,11 @@ class PublishProcessor(Processor):
         Return PUBLISHED message based on the PUBLISH message received.
         """
         received_message = PublishMessage(*self.message.value)
-        allow, msg = customize.authorize_publication(received_message.topic, self.connection)
-        answer = None
-        if allow:
-            publication_id = create_global_id()
-            self.broadcast_messages, response = customize.get_publish_messages(received_message, publication_id, self.connection.id)
-            if received_message.options.get("acknowledge"):
-                if response is None:
-                    answer = PublishedMessage(
-                        request_id=received_message.request_id,
-                        publication_id=publication_id
-                    )
-                else:
-                    answer = response
-        else:
-            answer = ErrorMessage(
-                request_id=received_message.request_id,
-                request_code=received_message.code,
-                uri=self.handler.realm.errors.unauthorized.to_uri()
-            )
-            answer.error(msg)
-        self.answer_message = answer
+        uri = self.handler.realm.get(received_message.uri_name, msg=received_message)
+
+        self.handler.realm.roles.authorize('publish', self.handler, received_message.code, received_message.request_id, *received_message.args, **received_message.kwargs)
+
+        # This will return the PublishedMessage if the appropriate option is set.
+        return uri.publish(self.handler, received_message)
+        
+
