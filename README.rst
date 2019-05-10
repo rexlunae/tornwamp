@@ -5,7 +5,7 @@ WAMPnado
 This Python module implements parts of `WAMP <https://wamp-proto.org/>`_
 (Web Application Messaging Protocol).  It is both a free-standing WAMP
 router and also a library for embedding a WAMP router within projects
-using the Tornado `Tornado <http://www.tornadoweb.org/>`_ asynchronous networking library and web framework.
+using the `Tornado <http://www.tornadoweb.org/>`_ asynchronous networking library and web framework.
 
 The main wampnado module, especially the ApplicationServer class provides
 a reference implementation.
@@ -62,53 +62,113 @@ This library can coexist on the same Tornado router as other things.  This means
 use it to develop WebSocket and RESTful HTTP applications listening on the same set of ports.
 
 
+
+Running
+=======
+
+The default reference implementation of the router can be run as follows:
+
+.. code :: bash
+
+    wampnado
+
+By default, it will be run on port 8080, bound only to localhost.  For a list of parameters, do
+this:
+
+.. code :: bash
+
+    wampnado -h
+
+There is also a debugging mode.  It can be run like this:
+
+.. code :: bash
+
+    wampnado -d
+
+All parameters supported in the non-debug mode will work in debug mode.
+
+
 Example of usage
 ================
 
-An example of how to build a server using TornWAMP (`wamp.py`):
+An example of how to build a server using WAMPnado:
 
 This basically hooks the read and write functions of the parent class in order
 to display them.  If you don't want that, you can get the same effect with the
 base WAMPHandler class.
 
 .. code :: python
+    """
+    WAMPnado: Web Application Messaging Protocol for Tornado (Python)
+    """
+    from argparse import ArgumentParser
+    from sys import exit, argv
 
     from tornado import web, ioloop
-    from wampnado.handler import WAMPHandler
-    
-    class Router:
-    
-        class Handler(WAMPHandler):
-            
-            # Hook all our output in pre-encoded form.  Good for debugging without manually interpretting binary.
-            def write_message(self, msg):
-                result = super().write_message(msg)
-                print('tx|' + str(self.realm_id) + '|: ' + msg.json)
-                return result
 
-            # Hook all our input in decoded form.  Good for debugging without manually parsing binaries.
-            def read_message(self, txt):
-                message = super().read_message(txt)
-                print('rx|' + str(self.realm_id) + '|: ' + message.json)
-                return message
-            def __init__(self, *args, **kwargs):
-                super().__init__(*args, **kwargs)
-                self.realm_id = 'unset'
+    from wampnado.handler import WAMPMetaHandler, WAMPMetaHandlerDebug
+    from wampnado.transports import WebSocketTransport
 
-    
-        def __init__(self, *args, default_host=None, port=8888, path=r'/ws', **kwargs):
-            super().__init__(*args, **kwargs)
-            self.default_host = default_host
-            self.port = port
-            self.path = path
-            self.app = web.Application([(path, self.Handler)], *args, default_host=default_host, **kwargs)
+
+    class ApplicationServer:
+        
+        def __init__(self, path, *listener_parameters, handler_class=WAMPMetaHandler):
+            self.listener_parameters = listener_parameters
+            self.path_maps = [(path, handler_class.factory(WebSocketTransport))]
 
         def run(self):
-            self.app.listen(self.port)
+            self.app = web.Application(self.path_maps)
+            for params in self.listener_parameters:
+                self.app.listen(params.port, address=params.address)
             ioloop.IOLoop.instance().start()
 
-    router = Router()
-    router.run()
+    class ListenerParameters:
+        def __init__(self, port=None, ssl_options=None, address='localhost'):
+            if port is None:
+                if ssl_options is None:
+                    port = 80
+                else:
+                    port = 443
+
+            self.port = port
+            self.ssl_options = ssl_options
+            self.address = address
+
+
+    lp = ListenerParameters(
+        port=8080
+    )
+
+
+    def parse_args():
+        argparser = ArgumentParser()
+
+        argparser.add_argument('-d', '--debug', help="Run in debug mode.  Display all messages to STDOUT", action='store_true', default=False)
+        argparser.add_argument('-p', '--port', help="Port to listen on.", default=lp.port)
+        argparser.add_argument('-a', '--address', help="Address to listen on.", default=lp.address)
+        argparser.add_argument('-u', '--url', help="URL for the WebSocket.  This should only be the path part of the URL (e.g.: /ws)", default='/ws')
+
+        args = argparser.parse_args()
+
+        url = args.url
+        del args.url
+        debug = args.debug
+        del args.debug
+
+        return url, args, debug
+
+    # Called during regular execution.
+    def main():
+        url, args, debug = parse_args()
+
+        if debug:
+            server = ApplicationServer(url, args, handler_class=WAMPMetaHandlerDebug)
+        else:
+            server = ApplicationServer(url, args)
+        server.run()
+
+    if __name__ == "__main__":
+        main()
 
 
 Which can be run:
