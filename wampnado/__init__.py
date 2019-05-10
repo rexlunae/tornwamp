@@ -31,7 +31,7 @@ class ApplicationServer:
     def run(self):
         self.app = web.Application(self.path_maps)
         for params in self.listener_parameters:
-            self.app.listen(params.port, address=params.address, ssl_options=params.ssl_options)
+            self.app.listen(params.port, address=params.address)
         ioloop.IOLoop.instance().start()
 
 lp = ListenerParameters(
@@ -45,9 +45,9 @@ def parse_args():
     argparser.add_argument('-p', '--port', help="Port to listen on.", default=lp.port)
     argparser.add_argument('-a', '--address', help="Address to listen on.", default=lp.address)
     argparser.add_argument('-u', '--url', help="URL for the WebSocket", default='/ws')
-    argparser.add_argument('-s', '--ssl_options', help="URL for the WebSocket", default=None)
 
     args = argparser.parse_args()
+
     url = args.url
     del args.url
     return url, args
