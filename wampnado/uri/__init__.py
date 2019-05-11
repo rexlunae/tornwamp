@@ -4,7 +4,7 @@ Used to handle PubSub uris publishers and subscribers
 from enum import Enum
 import tornadis
 
-from wampnado import messages
+from wampnado.messages import BroadcastMessage, PUBLISHER_NODE_ID
 from wampnado.identifier import create_global_id
 
 # XXX - TODO:
@@ -34,34 +34,8 @@ class URI(object):
         self.name = name
         self.uri_type = uri_type
 
-    def _on_event_message(self, uri, raw_msg):
-        msg = messages.BroadcastMessage.from_text(raw_msg.decode("utf-8"))
-        #assert_msg = "broadcast message uri and redis pub/sub queue must match ({} != {})".format(uri, msg.uri)
-        #assert uri == msg.uri, assert_msg
-        if msg.publisher_node_id != messages.PUBLISHER_NODE_ID.hex:
-            deliver_event_messages(self, msg.event_message, None)
-
     def __str__(self):
         return self.name
 
     def __repr__(self):
         return "URI('" + str(self.name) + "', " + str(self.uri_type) + ")"
-
-def deliver_event_messages(uri, event_msg, publisher_connection_id=None):
-    """
-    Allows customization of methods used by pub/sub
-
-    This method may be overridden. It is called whenever an EventMessage
-    is published.
-
-    Parameters:
-        uri - uri in which the message was published
-        event_msg - published message
-        publisher_connection_id - if it is not None, it is the websocket
-        connection id of the publisher
-    """
-    for subscription_id, subscriber in uri.subscribers.items():
-        if publisher_connection_id is None or subscriber.id != publisher_connection_id:
-            event_msg.subscription_id = subscription_id
-            subscriber._websocket.write_message(event_msg)
-

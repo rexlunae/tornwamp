@@ -7,7 +7,7 @@ from inspect import isfunction
 import tornadis
 from tornado import ioloop
 
-from wampnado.uri import URI, URIType, deliver_event_messages
+from wampnado.uri import URI, URIType
 from wampnado.features import Options, server_features
 from wampnado.identifier import create_global_id
 from wampnado.auth import server_auth_ident
@@ -68,7 +68,7 @@ class Topic(URI):
                 event_message = EventMessage(subscription_id=subscription_id, publication_id=publication_id, args=broadcast_msg.args, kwargs=broadcast_msg.kwargs)
 
                 # Per WAMP standard, the publisher does not receive the message.
-                if self.subscribers[subscription_id].sessionid != origin_handler.sessionid:
+                if not self.subscribers[subscription_id].pseudo and self.subscribers[subscription_id].sessionid != origin_handler.sessionid:
                     self.subscribers[subscription_id].write_message(event_message)
 
         if broadcast_msg.options.acknowlege:
