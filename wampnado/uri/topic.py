@@ -109,17 +109,3 @@ class Topic(URI):
         else:
             return False
 
-
-    #@property
-    #def dict(self):
-    #    """
-    #    Return a dict that is serializable.
-    #    """
-    #    subscribers = {subscription_id: conn.dict for subscription_id, conn in self.subscribers.items()}
-    #    publishers = {subscription_id: conn.dict for subscription_id, conn in self.publishers.items()}
-    #    data = {
-    #        "name": self.name,
-    #        "subscribers": subscribers,
-    #        "publishers": publishers
-    #    }
-    #    return data
