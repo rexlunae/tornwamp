@@ -7,8 +7,9 @@ from inspect import iscoroutinefunction, isfunction
 from asyncio import create_task, get_event_loop
 
 from wampnado.uri import URI, URIType
+from wampnado.uri.error import WAMPSimpleException
 from wampnado.features import Options
-from wampnado.messages import ResultMessage, InterruptMessage, InvocationMessage, ResultMessage
+from wampnado.messages import Code, ResultMessage, InterruptMessage, InvocationMessage, ResultMessage
 
 class Procedure(URI):
     """
@@ -47,12 +48,16 @@ class Procedure(URI):
         Options:
         receive_progress (bool): Set to true to allow progressive yields.  Otherwise, the first yield will end the request.
         """
-        if self.pseudo:
-            result = self.callback(*args, **kwargs)
-            return ResultMessage(request_id=request_id, details={}, args=result)
-        else:
-            type(self).pending[request_id] = (invoking_handler, datetime.utcnow(), options)
-            return self.write_message(InvocationMessage(request_id=request_id, registration_id=self.registration_id, args=args, kwargs=kwargs, details=options))
+        try:
+            if self.pseudo:
+                result = self.callback(*args, **kwargs)
+                return ResultMessage(request_id=request_id, details={}, args=result)
+            else:
+                type(self).pending[request_id] = (invoking_handler, datetime.utcnow(), options)
+                return self.write_message(InvocationMessage(request_id=request_id, registration_id=self.registration_id, args=args, kwargs=kwargs, details=options))
+        # Convert a simple exception into a full one.
+        except WAMPSimpleException as e:
+            raise e.to_exception(Code.CALL, request_id)
 
     def cancel(self, request_id):
         """

@@ -5,10 +5,9 @@ from wampnado.uri.procedure import Procedure
 from wampnado.uri.error import Error
 from wampnado.identifier import create_global_id
 from wampnado.features import Options
-from re import compile
+from wampnado.messages import PublishMessage
 
-# A lot of these calls need the message passed in so that they can raise exceptions, but there really isn't a message in the case of internal use, so we fake it.
-fake_message = Options(request_id=None, code=None)
+from re import compile
 
 class URIManager:
     """
@@ -56,20 +55,20 @@ class URIManager:
         )
 
 
-    def get(self, uri_name, msg=fake_message):
+    def get(self, uri_name):
         """
         Looks up and returns the specified uri object by name.  If it is not found, it will raise the appropriate exception, unless noraise is true.
         """
         if not self.uri_pattern.match(uri_name):
-            raise self.errors.invalid_uri.to_exception(request_id=msg.request_id, request_code=msg.code, details=Options(uri=uri_name))
+            raise self.errors.invalid_uri.to_simple_exception('uri is not valid.', details=Options(uri=uri_name))
 
         return  self.uris.get(uri_name)
 
-    def create(self, name, uri_obj, returnifexists=True, msg=fake_message):
+    def create(self, name, uri_obj, returnifexists=True):
         """
         Adds a new uri agnostic of type.  Usually, this should be called by other methods inside this object.
         """
-        uri = self.get(name, msg=msg)
+        uri = self.get(name)
 
         # Only add if it doesn't exist.
         if uri is None:
@@ -83,14 +82,14 @@ class URIManager:
             return None
 
 
-    def create_topic(self, name, msg=fake_message):
+    def create_topic(self, name, reserver=None):
         """
         Creates a uri that can be subscribed and published to.
         """
-        args = self.create(name, Topic(name))
+        args = self.create(name, Topic(name, reserver=reserver))
 
         if args[0].uri_type != URIType.TOPIC:
-            raise self.errors.no_such_subscription.to_exception(msg.code, msg.request_id)
+            raise self.errors.no_such_subscription.to_simple_exception('uri {} is of type {}'.format(name, args[0].uri_type))
 
         return args
 
@@ -103,16 +102,22 @@ class URIManager:
 
         return args
 
-    def create_procedure(self, name, provider_handler, msg=fake_message):
+    def create_procedure(self, name, provider_handler):
         """
         Add a new procedure provided by the provider_handler.  request_msg should generally be specified whenever the user.
         """
         args = self.create(name, Procedure(name, provider_handler), returnifexists=False)
         if args is None:
-            raise self.errors.procedure_already_exists.to_exception(msg.code, msg.request_id)
+            raise self.errors.procedure_already_exists.to_simple_exception('uri already exists', {'uri': name})
 
         return args
 
+
+    def reserve_topic(self, uri_name, provider_handler):
+        """
+        Creates a topic URI that can be subscribed to without having to subscribe to it.
+        """
+        return self.create_topic(uri_name, reserver=provider_handler)
 
     def remove(self, registration_id):
         """
@@ -126,11 +131,11 @@ class URIManager:
             return self.uris.pop(name)
 
 
-    def add_subscriber(self, uri_name, handler, msg=fake_message):
+    def add_subscriber(self, uri_name, handler):
         """
         Add a handler as a uri's subscriber.  
         """
-        (uri, _) = self.create_topic(uri_name, msg=msg)
+        (uri, _) = self.create_topic(uri_name)
         subscription_id = self.uris[uri.name].add_subscriber(handler)
         return subscription_id
 
@@ -158,6 +163,15 @@ class URIManager:
                 del self.uris[name]
         if notify:
             pass    # XXX Send the final message.
+
+    def publish(self, uri_name, origin_handler,  *args, request_id=None, **kwargs):
+        """
+        A convenience function to allow slightly more seamless publication.
+        """
+        if request_id is None:
+            request_id = create_global_id()
+        self.get(uri_name).publish(origin_handler, PublishMessage(uri_name='flight_control.close_flight.on', request_id=request_id, args=args, kwargs=kwargs))
+
 
 
 

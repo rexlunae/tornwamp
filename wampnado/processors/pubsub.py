@@ -6,6 +6,7 @@ from wampnado.identifier import create_global_id
 from wampnado.messages import ErrorMessage, EventMessage, PublishMessage, PublishedMessage, SubscribeMessage, SubscribedMessage, BroadcastMessage
 from wampnado.processors import Processor
 from wampnado.auth import default_roles
+from wampnado.uri.error import WAMPSimpleException
 
 default_roles.register('subscribe')
 default_roles.register('publish')
@@ -22,11 +23,13 @@ class SubscribeProcessor(Processor):
 
         self.handler.realm.roles.authorize('subscribe', self.handler, received_message.code, received_message.request_id)
 
-        subscription_id = self.handler.realm.add_subscriber(
-            received_message.uri,
-            self.handler,
-            msg=received_message,
-        )
+        try:
+            subscription_id = self.handler.realm.add_subscriber(
+                received_message.uri,
+                self.handler,
+            )
+        except WAMPSimpleException as e:
+            raise e.to_exception(received_message.code, received_message.request_id)
 
         return SubscribedMessage(
             request_id=received_message.request_id,

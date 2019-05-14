@@ -37,7 +37,7 @@ class Roles(Options):
         if handler not in perm_tables.whitelist:
             perm_tables.whitelist.append(handler)
 
-    def authorize(self, role, handler, request_id, request_code, *args, noraise=False, **kwargs):
+    def authorize(self, role, handler, *args, noraise=False, **kwargs):
         """
         Checks the permissions of the handler to the given role.  If approved, returns True.  If not approved, it will raise
         a WAMPError exception...unless noraise is True, in which case it will return false.
@@ -59,7 +59,7 @@ class Roles(Options):
                 return True
 
         if not noraise:
-            raise handler.realm.errors.not_authorized.to_exception(request_id=request_id, request_code=request_code, args=args, kwargs=kwargs)
+            raise handler.realm.errors.not_authorized.to_simple_exception(args=args, kwargs=kwargs)
         return False
 
     def copy(self):

@@ -5,7 +5,11 @@ A module to regularize the errors that WAMP can issue.
 from wampnado.uri import URI, URIType
 from wampnado.messages import ErrorMessage
 
+
 class WAMPException(Exception):
+    """
+    An exception class that can be raised to generate a WAMP error message up the call stack.
+    """
     def __init__(self, error_uri, request_code, request_id, *args, **kwargs):
         self.error_uri = error_uri
         self.request_code = request_code
@@ -23,6 +27,22 @@ class WAMPException(Exception):
         """
         return self.error_uri.message(self.request_code, self.request_id, *self.args, **self.kwargs)
 
+class WAMPSimpleException(Exception):
+    """
+    Some exceptions may be raised in a context where there's no natural reason to
+    have all of the information needed to raise a WAMPException.  This exception can be raised in those contexts,
+    so that it can be caught and converted into a full WAMPException further up the call stack.
+
+    Generally, this is the type of exception that should be used by external modules.
+    """
+    def __init__(self, error_uri, reason, *args, **kwargs):
+        self.error_uri = error_uri
+        self.reason = reason
+        self.args = args
+        self.kwargs = kwargs
+
+    def to_exception(self, request_code, request_id):
+        return WAMPException(self.error_uri, request_code, request_id, *self.args, reason=self.reason, **self.kwargs)
 
 class Error(URI):
     """
@@ -55,9 +75,16 @@ class Error(URI):
 
     def to_exception(self, request_code, request_id, *args, **kwargs):
         """
-        Returns an exception appropriate for raising.
+        Returns an exception appropriate for raising.  That can be directly converted into an ERROR message.
         """
         return WAMPException(self, request_code, request_id, *args, **kwargs)
+
+    def to_simple_exception(self, reason, *args, **kwargs):
+        """
+        Returns an exception that can be raised but does not contain all the information to generate an ERROR message.
+        Must be converted up the call stack into an exception.
+        """
+        return WAMPSimpleException(self, reason, *args, **kwargs)
     
 
     def raise_to(self, handler, request_code, request_id, *args, **kwargs):

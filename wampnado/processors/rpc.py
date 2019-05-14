@@ -14,6 +14,7 @@ from wampnado.messages import CallMessage, RPCRegisterMessage, RPCRegisteredMess
 from wampnado.processors import Processor
 from wampnado.messages import Code
 from wampnado.uri.procedure import Procedure
+from wampnado.uri.error import WAMPSimpleException
 from wampnado.auth import default_roles
 
 default_roles.register('call')
@@ -74,12 +75,16 @@ class CallProcessor(Processor):
         """
         msg = CallMessage(*self.message.value)
 
-        self.handler.realm.roles.authorize('call', self.handler, msg.code, msg.request_id)
 
-        uri = self.handler.realm.get(msg.procedure)
+        try:
+            self.handler.realm.roles.authorize('call', self.handler)
 
-        if uri is None:
-            raise self.handler.realm.errors.no_such_procedure.to_exception(msg.code, msg.request_id, *msg.args, **msg.kwargs)
+            uri = self.handler.realm.get(msg.procedure)
+            if uri is None:
+                raise self.handler.realm.errors.no_such_procedure.to_simple_exception(*msg.args, **msg.kwargs)
 
-        return uri.invoke(self.handler, msg.request_id, *msg.args, **msg.kwargs)
+            return uri.invoke(self.handler, msg.request_id, *msg.args, **msg.kwargs)
+
+        except WAMPSimpleException as e:
+            raise e.to_exception(msg.code, msg.request_id)
 
