@@ -56,43 +56,7 @@ class LocalTransport(Transport):
     # Local transports always use the "NONE_PROTOCOL"
     protocol = NONE_PROTOCOL
 
-    def __init__(self, client):
-        self.client = client
-
     supported_protocols = {
         NONE_PROTOCOL: True
     }
-        
-    def on_close(self):
-        raise(NotImplementedError)
 
-    def close(self):
-        raise(NotImplementedError)
-
-
-
-    def write_message(self, msg):
-        """
-        Called by the server to send a message to the client.
-        """
-        return self.client.message_queue_in.put(msg)
-
-    def read_message(self):
-        """
-        Called by the server to get a message from the client.
-        """
-        return self.client.message_queue_out.get()
-
-
-
-    async def send_message(self, msg):
-        """
-        Called by the client to send a message to the server.
-        """
-        return await self.on_message(msg)
-
-    def receive_message(self):
-        """
-        Called by the client to get a message from the server.
-        """
-        return self.client.message_queue_in.get()
