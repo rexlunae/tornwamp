@@ -43,12 +43,13 @@ class Topic(URI):
     A uri URI for use with pub/sub functionality.
     """
 
-    def __init__(self, name):
+    def __init__(self, name, reserver=None):
         """
 
         """
         super().__init__(name, URIType.TOPIC)
         self.subscribers = {}
+        self.reserver = reserver
         self.registration_id = create_global_id()
 
     def publish(self, origin_handler, broadcast_msg):
@@ -68,7 +69,7 @@ class Topic(URI):
                 event_message = EventMessage(subscription_id=subscription_id, publication_id=publication_id, args=broadcast_msg.args, kwargs=broadcast_msg.kwargs)
 
                 # Per WAMP standard, the publisher does not receive the message.
-                if not self.subscribers[subscription_id].pseudo and self.subscribers[subscription_id].sessionid != origin_handler.sessionid:
+                if origin_handler is None or self.subscribers[subscription_id].sessionid != origin_handler.sessionid:
                     self.subscribers[subscription_id].write_message(event_message)
 
         if broadcast_msg.options.acknowlege:
@@ -97,6 +98,8 @@ class Topic(URI):
         """
         Removes a given handler from any role in the uri.
         """
+        if self.reserver is not None and self.reserver == handler:
+            self.reserver = None
         self.remove_subscriber(handler)
 
     @property
