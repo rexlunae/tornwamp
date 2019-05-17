@@ -81,7 +81,7 @@ class CallProcessor(Processor):
 
             uri = self.handler.realm.get(msg.procedure)
             if uri is None:
-                raise self.handler.realm.errors.no_such_procedure.to_simple_exception(*msg.args, **msg.kwargs)
+                raise self.handler.realm.errors.no_such_procedure.to_simple_exception('not found', *msg.args, **msg.kwargs)
 
             return uri.invoke(self.handler, msg.request_id, *msg.args, **msg.kwargs)
 
