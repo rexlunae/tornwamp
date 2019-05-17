@@ -1,3 +1,5 @@
+from threading import RLock
+
 from wampnado import processors
 from wampnado.uri import URIType
 from wampnado.uri.topic import Topic
@@ -16,6 +18,7 @@ class URIManager:
     """
     def __init__(self):
         # A table of the registrations issued to URIs under this realm.
+        self.lock = RLock()
         self.registrations = {}
 
         # A table of the URIs.
@@ -68,18 +71,22 @@ class URIManager:
         """
         Adds a new uri agnostic of type.  Usually, this should be called by other methods inside this object.
         """
-        uri = self.get(name)
+        self.lock.acquire()
+        try:
+            uri = self.get(name)
 
-        # Only add if it doesn't exist.
-        if uri is None:
-            self.uris[name] = uri_obj
-            registration_id = self.uris[name].registration_id
-            self.registrations[registration_id] = name
-            return self.uris[name], registration_id
-        elif returnifexists:
-            return uri, uri.registration_id
-        else:
-            return None
+            # Only add if it doesn't exist.
+            if uri is None:
+                self.uris[name] = uri_obj
+                registration_id = self.uris[name].registration_id
+                self.registrations[registration_id] = name
+                return self.uris[name], registration_id
+            elif returnifexists:
+                return uri, uri.registration_id
+            else:
+                return None
+        finally:
+            self.lock.release()
 
 
     def create_topic(self, name, reserver=None):
@@ -89,7 +96,7 @@ class URIManager:
         args = self.create(name, Topic(name, reserver=reserver))
 
         if args[0].uri_type != URIType.TOPIC:
-            raise self.errors.no_such_subscription.to_simple_exception('uri {} is of type {}'.format(name, args[0].uri_type))
+            raise self.errors.no_such_subscription.to_simple_exception('uri type error', requested_type=URIType.TOPIC, uri=name, required_type=args[0].uri_type)
 
         return args
 
@@ -108,7 +115,7 @@ class URIManager:
         """
         args = self.create(name, Procedure(name, provider_handler), returnifexists=False)
         if args is None:
-            raise self.errors.procedure_already_exists.to_simple_exception('uri already exists', {'uri': name})
+            raise self.errors.procedure_already_exists.to_simple_exception('uri already exists', uri=name)
 
         return args
 
@@ -170,7 +177,7 @@ class URIManager:
         """
         if request_id is None:
             request_id = create_global_id()
-        self.get(uri_name).publish(origin_handler, PublishMessage(uri_name='flight_control.close_flight.on', request_id=request_id, args=args, kwargs=kwargs))
+        self.get(uri_name).publish(origin_handler, PublishMessage(uri_name=uri_name, request_id=request_id, args=args, kwargs=kwargs))
 
 
 
