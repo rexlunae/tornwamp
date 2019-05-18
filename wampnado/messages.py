@@ -319,6 +319,7 @@ class InterruptMessage(Message):
     """
     def __init__(self, code=Code.INTERRUPT, request_id=None, options={}):
         assert request_id is not None, "InterruptMessage must have request_id"
+        self.request_id = request_id
         self.options = Options(**options)
         self.value = [
             self.code,
