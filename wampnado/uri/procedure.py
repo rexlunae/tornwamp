@@ -59,7 +59,7 @@ class Procedure(URI):
         except WAMPSimpleException as e:
             raise e.to_exception(Code.CALL, request_id)
         except Exception as e:
-            raise invoking_handler.realm.errors.general_error.to_exception(Code.CALL, request_id)
+            raise invoking_handler.realm.errors.general_error.to_exception(Code.CALL, request_id, e)
 
     def cancel(self, request_id):
         """
