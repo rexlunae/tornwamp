@@ -58,6 +58,8 @@ class Procedure(URI):
         # Convert a simple exception into a full one.
         except WAMPSimpleException as e:
             raise e.to_exception(Code.CALL, request_id)
+        except Exception as e:
+            raise invoking_handler.realm.errors.general_error.to_exception(Code.CALL, request_id)
 
     def cancel(self, request_id):
         """
