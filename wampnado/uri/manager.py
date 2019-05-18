@@ -58,22 +58,26 @@ class URIManager:
         )
 
 
-    def get(self, uri_name):
+    def get(self, uri_name, noraise=False):
         """
         Looks up and returns the specified uri object by name.  If it is not found, it will raise the appropriate exception, unless noraise is true.
         """
         if not self.uri_pattern.match(uri_name):
             raise self.errors.invalid_uri.to_simple_exception('uri is not valid.', details=Options(uri=uri_name))
 
-        return  self.uris.get(uri_name)
+        uri = self.uris.get(uri_name)
+        if uri is None and not noraise:
+            raise self.errors.no_such_role.to_simple_exception('not found')
+        return uri
 
-    def create(self, name, uri_obj, returnifexists=True):
+
+    def create(self, name, uri_obj, returnifexists=True, noraise=False):
         """
         Adds a new uri agnostic of type.  Usually, this should be called by other methods inside this object.
         """
         self.lock.acquire()
         try:
-            uri = self.get(name)
+            uri = self.get(name, noraise=True)
 
             # Only add if it doesn't exist.
             if uri is None:
@@ -83,8 +87,8 @@ class URIManager:
                 return self.uris[name], registration_id
             elif returnifexists:
                 return uri, uri.registration_id
-            else:
-                return None
+            elif not noraise:
+                raise self.errors.procedure_already_exists.to_simple_exception('uri already exists', uri=name)
         finally:
             self.lock.release()
 
@@ -113,11 +117,7 @@ class URIManager:
         """
         Add a new procedure provided by the provider_handler.  request_msg should generally be specified whenever the user.
         """
-        args = self.create(name, Procedure(name, provider_handler), returnifexists=False)
-        if args is None:
-            raise self.errors.procedure_already_exists.to_simple_exception('uri already exists', uri=name)
-
-        return args
+        return self.create(name, Procedure(name, provider_handler), returnifexists=False)
 
 
     def reserve_topic(self, uri_name, provider_handler):
@@ -132,7 +132,7 @@ class URIManager:
         """
         name = self.registrations.pop(registration_id, False)
         if name:
-            for registration_id, registration_uri in self.registrations:
+            for registration_id, registration_uri in self.registrations.items():
                 if name == registration_uri:
                     self.registrations.pop(name)
             return self.uris.pop(name)

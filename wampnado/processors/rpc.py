@@ -80,9 +80,6 @@ class CallProcessor(Processor):
             self.handler.realm.roles.authorize('call', self.handler)
 
             uri = self.handler.realm.get(msg.procedure)
-            if uri is None:
-                raise self.handler.realm.errors.no_such_procedure.to_simple_exception('not found', *msg.args, **msg.kwargs)
-
             return uri.invoke(self.handler, msg.request_id, *msg.args, **msg.kwargs)
 
         except WAMPSimpleException as e:
