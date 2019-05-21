@@ -11,12 +11,32 @@ from copy import deepcopy
 
 from enum import IntEnum, Enum
 from io import BytesIO
-from base64 import b64encode
+from base64 import b64encode, standard_b64decode
 
 from wampnado.identifier import create_global_id
 from wampnado.features import server_features, Options
 
 PUBLISHER_NODE_ID = uuid.uuid4()
+
+def decode_b64(s):
+    """
+    Finds all the binary objects in the struct, and recursively converts them to base64 prepended by \0, per the WAMP standard.
+    """
+    if isinstance(s, dict):
+        ret = {}
+        for k,v in s.items():
+            ret[k] = decode_b64(v)
+        return ret
+    elif isinstance(s, list) or isinstance(s, tuple):
+        ret = []
+        for v in s:
+            ret.append(decode_b64(v))
+        return ret
+    elif isinstance(s, str) and s.beginswith('\0'):
+        return standard_b64decode(s[1:])
+    else:
+        return s
+    
 
 def encode_bin_as_b64(s):
     """
@@ -192,7 +212,7 @@ class Message(object):
         """
         Decode text to JSON and return a Message object accordingly.
         """
-        raw = json.loads(text)
+        raw = decode_b64(json.loads(text))
         raw[0] = Code(raw[0])  # make it an object of type Code
         return cls(*raw)
 
