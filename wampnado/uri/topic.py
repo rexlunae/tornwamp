@@ -3,9 +3,11 @@ Classes and methods for Topic URIs for pub/sub
 """
 
 from inspect import isfunction
+from warnings import warn
 
 import tornadis
 from tornado import ioloop
+from tornado.websocket import WebSocketClosedError
 
 from wampnado.uri import URI, URIType
 from wampnado.features import Options, server_features
@@ -62,20 +64,33 @@ class Topic(URI):
         """
         publication_id = create_global_id()
 
-        for subscription_id in self.subscribers.keys():
-            if self.subscribers[subscription_id].pseudo:
-                self.subscribers[subscription_id].callback(*broadcast_msg.args, **broadcast_msg.kwargs)
-            else:
-                event_message = EventMessage(subscription_id=subscription_id, publication_id=publication_id, args=broadcast_msg.args, kwargs=broadcast_msg.kwargs)
+        purge = []
 
-                # Per WAMP standard, the publisher does not receive the message.
-                if origin_handler is None or self.subscribers[subscription_id].sessionid != origin_handler.sessionid:
-                    self.subscribers[subscription_id].write_message(event_message)
+        for subscription_id in self.subscribers.keys():
+            try:
+                if self.subscribers[subscription_id].pseudo:
+                    # We expect all pseudo-subscribers to accept any provided parameters, or accept the output to the error log.
+                    self.subscribers[subscription_id].callback(*broadcast_msg.args, **broadcast_msg.kwargs)                     
+                else:
+                    event_message = EventMessage(subscription_id=subscription_id, publication_id=publication_id, args=broadcast_msg.args, kwargs=broadcast_msg.kwargs)
+
+                    # Per WAMP standard, the publisher does not receive the message.
+                    if origin_handler is None or self.subscribers[subscription_id].sessionid != origin_handler.sessionid:
+                        self.subscribers[subscription_id].write_message(event_message)
+
+            # If we get an error, remove the subscription.
+            except WebSocketClosedError:
+                purge.append(subscription_id)
+
+        # We don't do this until the loop is done to prevent breaking the iterator.
+        for subscription_id in purge:
+            del self.subscribers[subscription_id]
 
         if broadcast_msg.options.acknowlege:
             return PublishedMessage(request_id=broadcast_msg.request_id, publication_id=self.registration_id)
         else:
             return None
+            
 
     def remove_subscriber(self, handler):
         """
