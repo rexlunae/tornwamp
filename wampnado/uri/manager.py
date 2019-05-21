@@ -177,8 +177,19 @@ class URIManager:
         """
         if request_id is None:
             request_id = create_global_id()
-        self.get(uri_name).publish(origin_handler, PublishMessage(uri_name=uri_name, request_id=request_id, args=args, kwargs=kwargs))
+        uri = self.get(uri_name, noraise=True)
 
+        # It is possible, and not an error, that there are not subscribers.  In that case, do nothing.
+        if uri is not None:
+            uri.publish(origin_handler, PublishMessage(uri_name=uri_name, request_id=request_id, args=args, kwargs=kwargs))
+
+    def call(self, uri_name, origin_handler,  *args, request_id=None, **kwargs):
+        """
+        A convenience function to allow slightly more seamless publication.
+        """
+        if request_id is None:
+            request_id = create_global_id()
+        self.get(uri_name).invoke(origin_handler, request_id, *args, **kwargs)
 
 
 
