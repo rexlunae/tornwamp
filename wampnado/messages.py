@@ -9,14 +9,36 @@ import msgpack
 import uuid
 from copy import deepcopy
 
-from enum import IntEnum
+from enum import IntEnum, Enum
 from io import BytesIO
+from base64 import b64encode
 
 from wampnado.identifier import create_global_id
 from wampnado.features import server_features, Options
 
 PUBLISHER_NODE_ID = uuid.uuid4()
 
+def encode_bin_as_b64(s):
+    """
+    Finds all the binary objects in the struct, and recursively converts them to base64 prepended by \0, per the WAMP standard.
+    """
+    if isinstance(s, dict):
+        ret = {}
+        for k,v in s.items():
+            ret[k] = encode_bin_as_b64(v)
+        return ret
+    elif isinstance(s, list) or isinstance(s, tuple):
+        ret = []
+        for v in s:
+            ret.append(encode_bin_as_b64(v))
+        return ret
+    elif isinstance(s, bytes):
+        return '\0{}'.format(b64encode(s).decode('ascii'))
+    elif isinstance(s, Enum):
+        return encode_bin_as_b64(s.value)
+    else:
+        return s
+    
 
 
 class Code(IntEnum):
@@ -71,7 +93,7 @@ class BroadcastMessage(object):
             "uri_name": self.uri_name,
             "event_message": self.event_message.json,
         }
-        return json.dumps(info_struct)
+        return json.dumps(encode_bin_as_b64(info_struct))
 
     @property
     def msgpack(self):
@@ -142,11 +164,7 @@ class Message(object):
         Create a JSON representation of this message.
         """
         message_value = deepcopy(self.value)
-        # TODO: test
-        for index, item in enumerate(message_value):
-            if isinstance(item, Code):
-                message_value[index] = item.value
-        return json.dumps(message_value)
+        return json.dumps(encode_bin_as_b64(message_value))
 
     @property
     def msgpack(self):
