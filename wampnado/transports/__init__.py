@@ -1,17 +1,12 @@
 """
 Pre-packaged transports.
 """
-import socket
-
-from warnings import warn
-from asyncio import gather
 from datetime import datetime
 
 from tornado.websocket import WebSocketHandler
 
-from wampnado.identifier import create_global_id
-from wampnado.realm import realms
 from wampnado.serializer import JSON_PROTOCOL, BINARY_PROTOCOL, NONE_PROTOCOL
+
 
 class Transport:
     """
@@ -25,13 +20,10 @@ class Transport:
 
         In WAMP, in order to disconnect, we're supposed to do a GOODBYE
         handshake.
-
-        Considering the server wanted to disconnect the client for some reason,
-        we leave the client in a "zombie" state, so it can't subscribe to
-        uris and can't receive messages from other clients.
         """
         self.zombification_datetime = datetime.now().isoformat()
         self.zombie = True
+
 
 class WebSocketTransport(WebSocketHandler, Transport):
     """
@@ -42,15 +34,31 @@ class WebSocketTransport(WebSocketHandler, Transport):
         BINARY_PROTOCOL: True,
     }
 
+    def select_subprotocol(self, subprotocols):
+        """
+        Select WAMP 2 subprocotol
+        """
+        current_protocol = JSON_PROTOCOL    # All WAMP implementations should support json, so we default to that.
+        for protocol in subprotocols:
+            if self.supported_protocols[protocol]:
+                current_protocol = protocol
+                if protocol == self.preferred_protocol:
+                    self.protocol = protocol
+                    return protocol
+
+        self.protocol = current_protocol
+        return current_protocol
+
 
 
 class LocalTransport(Transport):
     """
-    This is basically a fake transport that simulates the functions of a transport
-    locally.  It saves encode/decode time because it doesn't actually need to serialize
+    This is basically a fake transport that simulates the functions of a transport for the
+    local thread.  It saves encode/decode time because it doesn't actually need to serialize
     and it can pass data by reference.  It is useful to add client-like functionality
     to the router while maintaining the conceptual separation between the two.  It may also
-    be useful for mocking.
+    be useful for mocking, but note that a lot of the code paths are different from real 
+    transports.
     """
 
     # Local transports always use the "NONE_PROTOCOL"
@@ -59,4 +67,3 @@ class LocalTransport(Transport):
     supported_protocols = {
         NONE_PROTOCOL: True
     }
-

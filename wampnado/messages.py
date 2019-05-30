@@ -221,6 +221,7 @@ class Message(object):
         """
         Decode binary blob to a message and return a Message object accordingly.
         """
+        print(bin)
         raw = msgpack.unpackb(bin, raw=False)
         raw[0] = Code(raw[0])  # make it an object of type Code
         return cls(*raw)

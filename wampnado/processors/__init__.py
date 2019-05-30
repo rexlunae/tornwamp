@@ -3,22 +3,23 @@ Processors are responsible for parsing received WAMP messages and providing
 feedback to the server on what should be done (e.g. send answer message order
 close connection).
 """
-import abc
 import six
+from abc import ABCMeta, abstractmethod
+from warnings import warn
 
 from tornado import gen
 
 from wampnado.messages import Message, ErrorMessage, GoodbyeMessage, HelloMessage, WelcomeMessage
 from wampnado.uri.error import WAMPException
 
-class Processor(six.with_metaclass(abc.ABCMeta)):
+class Processor(six.with_metaclass(ABCMeta)):
     """
     Abstract class which defines the base behavior for processing messages
     sent to the Websocket.
 
     Classes that extend this are supposed to overwride process method.
     """
-    __metaclass__ = abc.ABCMeta
+    __metaclass__ = ABCMeta
 
     def __init__(self, message, handler):
         """
@@ -48,7 +49,7 @@ class Processor(six.with_metaclass(abc.ABCMeta)):
             self.answer_message = e.message()
 
 
-    @abc.abstractmethod
+    @abstractmethod
     def process(self):
         """
         Responsible for processing the input message and may change the default
@@ -78,10 +79,22 @@ class UnhandledProcessor(Processor):
         out_message.error(description)
         return out_message
 
+class AbortProcessor(Processor):
+    """
+    Responsible for handling ABORT messages.  Closes the connection and cleans up.
+    """
+    def process(self):
+        """
+        Close the connection, return nothing.
+        """
+        self.handler.close()
+        return None
+
 
 class HelloProcessor(Processor):
     """
-    Responsible for dealing HELLO messages.
+    Responsible for handling HELLO messages.
+    Server receives a HELLO from the client.
     """
     def process(self):
         """
@@ -89,8 +102,22 @@ class HelloProcessor(Processor):
         """
         hello_message = HelloMessage(*self.message.value)
         welcome_message = WelcomeMessage()
-        self.handler.attach_realm(hello_message.realm, hello_message=hello_message)
+        self.handler.attach_realm(hello_message.realm, hello_message=hello_message.details)
         return welcome_message
+
+
+class WelcomeProcessor(Processor):
+    """
+    Responsible for handling WELCOME messages.
+    Client receives a WELCOME from the server in response to a HELLO.
+    """
+    def process(self):
+        """
+        Return WELCOME message based on the input HELLO message.  Accept session_id from the server.
+        """
+        welcome_message = WelcomeMessage(*self.message.value)
+        self.handler.session_id = welcome_message.session_id
+        return None
 
 
 class GoodbyeProcessor(Processor):
@@ -108,3 +135,25 @@ class GoodbyeProcessor(Processor):
         self.close_code = 1000
         self.close_reason = self.answer_message.details.get('message', '')
         return GoodbyeMessage(*self.message.value)
+
+class ClientErrorProcessor(Processor):
+    """
+    Processes ERROR messages on the client.
+    """
+    def process(self):
+        """
+        Send the error.
+        """
+        msg = ErrorMessage(*self.message.value)
+        self.handler.error(*msg.args, **msg.kwargs)
+
+class ErrorProcessor(Processor):
+    """
+    Processes ERROR messages on the server.  Should propagate the error back to the erring client.
+    """
+    def process(self):
+        """
+        Close the connection, return nothing.
+        """
+        msg = ErrorMessage(*self.message.value)
+        warn(*msg.args, **msg.kwargs)

@@ -36,10 +36,21 @@ class SubscribeProcessor(Processor):
             subscription_id=subscription_id
         )
 
+class SubscribedProcessor(Processor):
+    """
+    Responsible for dealing SUBSCRIBED messages.
+    """
+    def process(self):
+        """
+        Return SUBSCRIBE message based on the input HELLO message.
+        """
+        received_message = SubscribedMessage(*self.message.value)
+        self.handler.add_subscriber(received_message.request_id, received_message.subscription_id)
+        return None
 
 class PublishProcessor(Processor):
     """
-    Responsible for dealing PUBLISH messages.
+    Responsible for dealing PUBLISH messages received by the server.
     """
     def process(self):
         """
@@ -54,3 +65,23 @@ class PublishProcessor(Processor):
         return uri.publish(self.handler, received_message)
         
 
+class PublishedProcessor(Processor):
+    """
+    Responsible for dealing PUBLISHED messages received by the client.
+    """
+    def process(self):
+        """
+        """
+        received_message = PublishedMessage(*self.message.value)
+        if hasattr(self.handler, 'on_published'):
+            self.handler.on_published(received_message.request_id, received_message.publication_id)
+
+class EventProcessor(Processor):
+    """
+    Handles pubsub events
+    """
+    def process(self):
+        """
+        """
+        received_message = EventMessage(*self.message.value)
+        self.handler.event(received_message)

@@ -10,7 +10,7 @@ from warnings import warn
 
 from tornado import gen
 
-from wampnado.messages import CallMessage, RPCRegisterMessage, RPCRegisteredMessage, ResultMessage, ErrorMessage, EventMessage, YieldMessage
+from wampnado.messages import CallMessage, RPCRegisterMessage, RPCRegisteredMessage, ResultMessage, ErrorMessage, EventMessage, YieldMessage, InvocationMessage
 from wampnado.processors import Processor
 from wampnado.messages import Code
 from wampnado.uri.procedure import Procedure
@@ -61,6 +61,19 @@ class RegisterProcessor(Processor):
             registration_id=registration_id,
         )
 
+class RegisteredProcessor(Processor):
+    """
+    Responsible for dealing SUBSCRIBED messages.
+    """
+    def process(self):
+        """
+        Return SUBSCRIBE message based on the input HELLO message.
+        """
+        received_message = RPCRegisteredMessage(*self.message.value)
+        self.handler.add_rpc(received_message.request_id, received_message.registration_id)
+        return None
+
+
 
 class CallProcessor(Processor):
     """
@@ -81,6 +94,23 @@ class CallProcessor(Processor):
 
             uri = self.handler.realm.get(msg.procedure)
             return uri.invoke(self.handler, msg.request_id, *msg.args, **msg.kwargs)
+
+        except WAMPSimpleException as e:
+            raise e.to_exception(msg.code, msg.request_id)
+
+
+class InvokeProcessor(Processor):
+    """
+    Handles pubsub events
+    """
+    def process(self):
+        """
+        Runs the callback.  YIELDs on success.
+        """
+        msg = InvocationMessage(*self.message.value)
+        try:
+            ret_args = self.handler.event(msg)
+            return YieldMessage(*ret_args, request_id=msg.request_id)
 
         except WAMPSimpleException as e:
             raise e.to_exception(msg.code, msg.request_id)
